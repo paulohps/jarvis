@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The query patterns of the custom App Actions (`xml/shortcuts.xml`): the Assistant understands them only in en-US. -->
+<resources>
+    <string-array name="create_reminder_queries" translatable="false">
+        <item>remind me to $title</item>
+        <item>remind me to $title on $date</item>
+        <item>remind me to $title at $time</item>
+        <item>remind me to $title on $date at $time</item>
+        <item>create a reminder to $title</item>
+        <item>create a reminder to $title on $date at $time</item>
+        <item>add a reminder $title</item>
+    </string-array>
+
+    <string-array name="complete_reminder_queries" translatable="false">
+        <item>complete the reminder $reminder</item>
+        <item>complete reminder $reminder</item>
+        <item>mark the reminder $reminder as done</item>
+        <item>mark $reminder as done</item>
+        <item>I did $reminder</item>
+    </string-array>
+</resources>

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "2700"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES">
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "JA0000000000000000000701"
+               BuildableName = "Jarvis.app"
+               BlueprintName = "Jarvis"
+               ReferencedContainer = "container:Jarvis.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "NetworkingTests"
+               BuildableName = "NetworkingTests"
+               BlueprintName = "NetworkingTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AuthTests"
+               BuildableName = "AuthTests"
+               BlueprintName = "AuthTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "LocalizationTests"
+               BuildableName = "LocalizationTests"
+               BlueprintName = "LocalizationTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "NavigationTests"
+               BuildableName = "NavigationTests"
+               BlueprintName = "NavigationTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "PushTests"
+               BuildableName = "PushTests"
+               BlueprintName = "PushTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "RealtimeTests"
+               BuildableName = "RealtimeTests"
+               BlueprintName = "RealtimeTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "OfflineTests"
+               BuildableName = "OfflineTests"
+               BlueprintName = "OfflineTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "VoiceTests"
+               BuildableName = "VoiceTests"
+               BlueprintName = "VoiceTests"
+               ReferencedContainer = "container:JarvisKit">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "JA0000000000000000000701"
+               BuildableName = "Jarvis.app"
+               BlueprintName = "Jarvis"
+               ReferencedContainer = "container:Jarvis.xcodeproj">
+            </BuildableReference>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "JA0000000000000000000701"
+               BuildableName = "Jarvis.app"
+               BlueprintName = "Jarvis"
+               ReferencedContainer = "container:Jarvis.xcodeproj">
+            </BuildableReference>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction
+      buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>

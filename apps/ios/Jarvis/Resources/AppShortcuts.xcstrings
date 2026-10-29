@@ -1,0 +1,142 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Add a shopping item in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a shopping item in ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar um item de compra no ${applicationName}"
+          }
+        }
+      }
+    },
+    "Add to the shopping list in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to the shopping list in ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar na lista de compras do ${applicationName}"
+          }
+        }
+      }
+    },
+    "Complete a reminder in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complete a reminder in ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Concluir um lembrete no ${applicationName}"
+          }
+        }
+      }
+    },
+    "Create a reminder in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a reminder in ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criar um lembrete no ${applicationName}"
+          }
+        }
+      }
+    },
+    "Mark a reminder done in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark a reminder done in ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcar um lembrete como feito no ${applicationName}"
+          }
+        }
+      }
+    },
+    "Remind me with ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remind me with ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Me lembrar com o ${applicationName}"
+          }
+        }
+      }
+    },
+    "Send a WhatsApp message with ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send a WhatsApp message with ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar uma mensagem de WhatsApp com o ${applicationName}"
+          }
+        }
+      }
+    },
+    "Send a message with ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send a message with ${applicationName}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar uma mensagem com o ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

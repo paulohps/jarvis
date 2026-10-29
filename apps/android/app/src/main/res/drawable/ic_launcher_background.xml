@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The brand gradient of the launcher icon (resources/brand/icon.svg). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF3D8BFF" />
+                <item android:offset="0.55" android:color="#FF0A5BE0" />
+                <item android:offset="1" android:color="#FF1C2C9E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="76"
+                android:centerY="30"
+                android:gradientRadius="49">
+                <item android:offset="0" android:color="#47FFFFFF" />
+                <item android:offset="1" android:color="#00FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

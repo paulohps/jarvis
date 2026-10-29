@@ -1,0 +1,17 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# SwiftPM
+JarvisKit/.build/
+JarvisKit/.swiftpm/
+.swiftpm/
+
+# Per machine and secret
+Config/Local.xcconfig
+Jarvis/Resources/GoogleService-Info.plist

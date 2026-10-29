@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="grouped_background">#F2F2F7</color>
+    <color name="accent">#007AFF</color>
+    <!-- The brand blue: the splash screen behind the white mark. -->
+    <color name="brand">#0A5BE0</color>
+</resources>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <!-- The Jarvis mark: a J with a spark for its dot. White, on a transparent background. -->
+    <g fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" transform="translate(-0.5 -1)">
+        <path d="M53 34V60A14 14 0 0 1 25 60"/>
+    </g>
+    <path fill="#FFFFFF" transform="translate(-0.5 -1)" d="M73 16C74.1 24.2 77.8 27.9 86 29C77.8 30.1 74.1 33.8 73 42C71.9 33.8 68.2 30.1 60 29C68.2 27.9 71.9 24.2 73 16Z"/>
+</svg>

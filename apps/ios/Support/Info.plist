@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>pt-BR</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>app.jarvis.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>jarvis</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>app.jarvis.google</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(JARVIS_GOOGLE_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
+	</array>
+	<key>GIDClientID</key>
+	<string>$(JARVIS_GOOGLE_IOS_CLIENT_ID)</string>
+	<key>JarvisAPIBaseURL</key>
+	<string>$(JARVIS_API_SCHEME)://$(JARVIS_API_HOST)</string>
+	<key>JarvisReverbURL</key>
+	<string>$(JARVIS_REVERB_SCHEME)://$(JARVIS_REVERB_HOST):$(JARVIS_REVERB_PORT)</string>
+	<key>JarvisReverbAppKey</key>
+	<string>$(JARVIS_REVERB_APP_KEY)</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Jarvis listens to your voice commands when you tap the microphone, and records the voice notes you schedule on WhatsApp.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Jarvis turns your voice commands into text to run them.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Jarvis sends your current location to a WhatsApp chat when you ask it to.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Jarvis connects to your development server on the local network.</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+		<key>UIImageName</key>
+		<string>LaunchMark</string>
+	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+</dict>
+</plist>

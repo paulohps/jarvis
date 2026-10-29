@@ -1,0 +1,4725 @@
+openapi: 3.1.0
+info:
+  title: Jarvis API
+  version: 1.0.0
+  description: |
+    The contract of the Jarvis apps (iOS and Android) with the server.
+
+    - Every endpoint is served under `/api/v1`, answers JSON (errors included)
+      and calls the same Actions as the web, so the rules and the validation
+      are the same on both clients (US-12.3).
+    - Authentication: a Sanctum personal access token per device, from
+      `POST /auth/login` or `POST /auth/google`, sent as `Authorization: Bearer <token>`.
+    - Public ids: every record is addressed by its `friendly_id` (`shl_…`,
+      `rem_…`); numeric ids never appear.
+    - Dates: instants are ISO-8601 in UTC. Dates sent without an offset
+      (`2026-10-06T09:00`) are read in the user's timezone (`GET /me`);
+      the reminder endpoints repeat it in `meta.timezone`.
+    - Modules: the shopping, reminders and WhatsApp endpoints need the module
+      switched on for the user (`GET /me` lists them); otherwise they answer 403.
+    - Rate limit: 60 requests per minute per user (10 per minute per IP on sign-in,
+      20 per minute per user on the voice endpoints).
+    - Web only, never in this API: invoices, the admin area, connecting a
+      WhatsApp number by QR code and the system notification templates.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Profile
+  - name: Devices
+  - name: Notifications
+  - name: Realtime
+  - name: Shopping
+  - name: Reminders
+  - name: WhatsApp
+  - name: Chats
+    description: |
+      Every chat channel in one screen (WhatsApp and Slack). Each
+      channel says what it supports (`ChatCapabilities`),
+      so the app shows only what can be done there; what Jarvis adds on
+      top (pin, priority, nickname, tags, archive, mute, contacts across
+      channels, reminders, scheduled messages, AI drafts) works the same
+      everywhere. Needs the `chats` module and a channel switched on for
+      the user by the administrator; accounts are connected on the web.
+      A message that comes in is `chat.conversation.updated` on the
+      user's private channel (`conversation_id`, `provider`,
+      `message_id`), and an account synced is `chat.account.synced`.
+      A WhatsApp chat tells `whatsapp.chat.updated` instead (`chat_id`
+      is the WhatsApp chat's id, the `conversable` of the conversation);
+      its pushes stay `whatsapp_message_received`. A WhatsApp
+      conversation keeps its pin, archive, mute, unread mark, nickname
+      and priority on the WhatsApp chat itself: setting them here sets
+      them there (and on the phone), and the other way round.
+  - name: Voice
+    description: |
+      Voice commands (US-10.2, US-10.3; Workflow 13). Every answer is a
+      `VoiceCommandResult`: the `message` is translated, for the app to show
+      and speak. 20 requests per minute per user on these endpoints.
+      The apps interpret on-device when they can (`POST /voice/actions`) and
+      remotely otherwise (`POST /voice/commands`); both run the same action.
+  - name: Webhooks
+    description: Server to server; not for the apps.
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in with e-mail and password (US-1.5)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, device_name]
+              properties:
+                email: { type: string, format: email, maxLength: 255 }
+                password: { type: string }
+                device_name: { type: string, maxLength: 255, examples: ['iPhone da Ana'] }
+      responses:
+        '200': { $ref: '#/components/responses/TokenIssued' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/google:
+    post:
+      tags: [Auth]
+      summary: Sign in with a native Google Sign-In ID token (US-1.5, US-1.3)
+      description: The token is checked on the server (audience, issuer, expiry). Without an account, a pending invitation is required.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token, device_name]
+              properties:
+                id_token: { type: string, maxLength: 4096 }
+                device_name: { type: string, maxLength: 255 }
+      responses:
+        '200': { $ref: '#/components/responses/TokenIssued' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke only the token of this call
+      responses:
+        '204': { description: 'Signed out.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me:
+    get:
+      tags: [Profile]
+      summary: The signed-in user and their modules (US-1.5, US-11.1)
+      responses:
+        '200':
+          description: The user.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me/preferences:
+    patch:
+      tags: [Profile]
+      summary: Change the language and/or the timezone (US-3.2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                locale: { type: string, enum: [en, pt_BR] }
+                timezone: { type: string, examples: ['America/Sao_Paulo'] }
+      responses:
+        '200':
+          description: The user as saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /me/workspaces/{workspace}:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+    patch:
+      tags: [Profile]
+      summary: Change the color the user sees one of their workspaces in, or make it their default
+      description: '`color` null goes back to the workspace''s color. A default can only be moved to another workspace, not unset. 404 for a workspace the user is not in.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                color: { type: [string, 'null'], examples: [purple] }
+                is_default: { type: boolean, enum: [true] }
+      responses:
+        '200':
+          description: The workspace as the user now sees it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/MyWorkspace' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /workspace-colors:
+    get:
+      tags: [Profile]
+      summary: The colors a workspace may be seen in
+      responses:
+        '200':
+          description: The palette, by name and hex.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WorkspaceColor' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/workspaces:
+    get:
+      tags: [Admin]
+      summary: Every workspace, by name (super admin)
+      responses:
+        '200':
+          description: The workspaces.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminWorkspace' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Create a workspace (super admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, color]
+              properties:
+                name: { type: string, maxLength: 60 }
+                color: { type: string, examples: [blue] }
+      responses:
+        '201': { $ref: '#/components/responses/AdminWorkspaceSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/workspaces/{workspace}:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+    get:
+      tags: [Admin]
+      summary: A workspace with its members (super admin)
+      responses:
+        '200': { $ref: '#/components/responses/AdminWorkspaceSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Admin]
+      summary: Rename or recolor a workspace (super admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 60 }
+                color: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/AdminWorkspaceSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      summary: Delete a workspace without data (super admin)
+      description: 422 on `workspace` when shopping lists, agenda items or invoices belong to it.
+      responses:
+        '204': { description: 'Deleted.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/workspaces/{workspace}/members:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+    post:
+      tags: [Admin]
+      summary: Add an existing user to a workspace (super admin)
+      description: The user's first workspace becomes their default. A module they had in no workspace is announced with `module_enabled`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user]
+              properties:
+                user: { type: string, examples: ['usr_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+                modules: { type: array, items: { type: string } }
+                color: { type: [string, 'null'] }
+      responses:
+        '201': { $ref: '#/components/responses/AdminWorkspaceMemberSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/workspaces/{workspace}/members/{user}:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+      - $ref: '#/components/parameters/User'
+    patch:
+      tags: [Admin]
+      summary: Change a member's modules, color or default (super admin)
+      description: '`modules` is the exact list switched on there (not for the super admin, who has them all).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                modules: { type: array, items: { type: string } }
+                color: { type: [string, 'null'] }
+                is_default: { type: boolean, enum: [true] }
+      responses:
+        '200': { $ref: '#/components/responses/AdminWorkspaceMemberSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      summary: Take a user out of a workspace (super admin)
+      responses:
+        '204': { description: 'Removed; the data stays in the workspace.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Every user with their workspaces (super admin)
+      responses:
+        '200':
+          description: The super admin first, then by name.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminUser' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users/{user}/deactivate:
+    parameters:
+      - $ref: '#/components/parameters/User'
+    post:
+      tags: [Admin]
+      summary: Deactivate a user (super admin, US-2.2)
+      responses:
+        '200': { $ref: '#/components/responses/AdminUserSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/users/{user}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/User'
+    post:
+      tags: [Admin]
+      summary: Reactivate a user (super admin, US-2.2)
+      responses:
+        '200': { $ref: '#/components/responses/AdminUserSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/invitations:
+    get:
+      tags: [Admin]
+      summary: The invitations, newest first (super admin, US-1.1)
+      responses:
+        '200':
+          description: The invitations.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminInvitation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Invite someone to a workspace (super admin, US-1.1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, workspace]
+              properties:
+                email: { type: string, format: email }
+                workspace: { type: string, examples: ['wsp_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+                modules: { type: array, items: { type: string } }
+                locale: { type: string, enum: [en, pt_BR] }
+      responses:
+        '201': { $ref: '#/components/responses/AdminInvitationSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/invitations/{invitation}/resend:
+    parameters:
+      - $ref: '#/components/parameters/Invitation'
+    post:
+      tags: [Admin]
+      summary: Send a pending invitation again, with a new link (super admin)
+      responses:
+        '200': { $ref: '#/components/responses/AdminInvitationSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/invitations/{invitation}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/Invitation'
+    post:
+      tags: [Admin]
+      summary: Revoke a pending invitation (super admin)
+      responses:
+        '200': { $ref: '#/components/responses/AdminInvitationSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/modules:
+    get:
+      tags: [Admin]
+      summary: The modules to switch on for members (super admin)
+      responses:
+        '200':
+          description: The modules, in menu order.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminModule' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /devices:
+    get:
+      tags: [Devices]
+      summary: The user's devices (US-3.4)
+      responses:
+        '200':
+          description: The devices, the last used first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Device' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Devices]
+      summary: Register or update the device of the current token (US-3.4, US-5.2)
+      description: A `push_token` already held by another device moves to this one. Leaving `push_token` out keeps the saved one; `null` clears it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, name]
+              properties:
+                platform: { type: string, enum: [ios, android] }
+                name: { type: string, maxLength: 255 }
+                push_token: { type: [string, 'null'], maxLength: 512 }
+      responses:
+        '200': { $ref: '#/components/responses/DeviceSaved' }
+        '201': { $ref: '#/components/responses/DeviceSaved' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /devices/{device}:
+    parameters:
+      - $ref: '#/components/parameters/Device'
+    delete:
+      tags: [Devices]
+      summary: Revoke a device and its token
+      responses:
+        '204': { description: 'Revoked.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: The in-app notifications, newest first (US-5.1)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: unread
+          in: query
+          description: Only the unread ones.
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: A page of notifications; `meta.unread_count` feeds the badge.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Notification' }
+                      meta:
+                        type: object
+                        properties:
+                          unread_count: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark every notification read
+      responses:
+        '200': { $ref: '#/components/responses/NotificationsMarked' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /notifications/{notification}/read:
+    parameters:
+      - name: notification
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Notifications]
+      summary: Mark one notification read
+      responses:
+        '200': { $ref: '#/components/responses/NotificationsMarked' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /broadcasting/auth:
+    post:
+      tags: [Realtime]
+      summary: Sign a private Reverb channel (US-5.1, US-8.2)
+      description: |
+        The channels: `private-App.Models.User.{id}` (the user's notifications and
+        WhatsApp account statuses) and `private-shopping-lists.{list friendly_id}`
+        (event `shopping-list.changed` with `list_id`, `change` and `item_id`; needs
+        the `shopping` module).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [socket_id, channel_name]
+              properties:
+                socket_id: { type: string }
+                channel_name: { type: string }
+      responses:
+        '200':
+          description: The channel signature.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /shopping/lists:
+    get:
+      tags: [Shopping]
+      summary: The household's lists (US-8.1)
+      parameters:
+        - name: filter
+          in: query
+          description: The active lists by name, or the archived ones, the latest archived first.
+          schema: { type: string, enum: [active, archived], default: active }
+      responses:
+        '200':
+          description: The lists, with their item counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Shopping]
+      summary: Create a list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShoppingListInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /shopping/lists/{list}:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    get:
+      tags: [Shopping]
+      summary: A list with its items, unchecked first and checked at the end
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Shopping]
+      summary: Rename a list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShoppingListInput' }
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Shopping]
+      summary: Delete a list (soft delete)
+      responses:
+        '204': { description: 'Deleted.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /shopping/lists/{list}/archive:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    post:
+      tags: [Shopping]
+      summary: Archive a list; its items become read only
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /shopping/lists/{list}/complete:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    post:
+      tags: [Shopping]
+      summary: Complete a list — archived as done; a recurring list gets its next one at once
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /shopping/lists/{list}/unarchive:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    post:
+      tags: [Shopping]
+      summary: Bring an archived list back
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /shopping/lists/{list}/default:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    post:
+      tags: [Shopping]
+      summary: Make the list the household's default; a voice command that names no list adds to it
+      description: The previous default stops being the default. An archived list cannot be the default (422 on `list`).
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Shopping]
+      summary: Stop the list being the household's default
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /shopping/lists/{list}/clear-checked:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    post:
+      tags: [Shopping]
+      summary: Remove every checked item (US-8.2)
+      responses:
+        '200':
+          description: The list as it is left, with how many items were removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ShoppingList' }
+                  meta:
+                    type: object
+                    properties:
+                      removed: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /shopping/lists/{list}/reorder:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    post:
+      tags: [Shopping]
+      summary: Reorder the items of the list (drag and drop)
+      description: >
+        The given items take the first positions, in the given order. Items
+        left out keep their relative order after them; ids that are not items
+        of the list are ignored. Checked items still come after the unchecked
+        ones. Broadcasts `shopping-list.changed` with `items.reordered`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { type: string, example: shi_01H8... }
+      responses:
+        '200':
+          description: The list in its new order.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ShoppingList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /shopping/lists/{list}/items:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingList'
+    post:
+      tags: [Shopping]
+      summary: Add an item at the end of the list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShoppingListItemInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ShoppingListItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /shopping/items/{item}:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingListItem'
+    patch:
+      tags: [Shopping]
+      summary: Edit an item's name and quantity or note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShoppingListItemInput' }
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingListItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Shopping]
+      summary: Remove an item
+      responses:
+        '204': { description: 'Removed.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /shopping/items/{item}/toggle:
+    parameters:
+      - $ref: '#/components/parameters/ShoppingListItem'
+    post:
+      tags: [Shopping]
+      summary: Check or uncheck an item, last write wins (US-8.2)
+      description: |
+        `checked` is the state the item should end in, so replaying a mark made
+        offline gives the same result. `client_updated_at` is when the mark was
+        made on the device (now when left out); a write older than the saved one
+        is ignored, and a device clock ahead of the server counts as now. The
+        item comes back as saved — not the requested state when a later write won.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [checked]
+              properties:
+                checked: { type: boolean }
+                client_updated_at: { type: [string, 'null'], format: date-time }
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingListItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /shopping/schedules:
+    get:
+      tags: [Shopping]
+      summary: The recurring lists, by name
+      responses:
+        '200':
+          description: The recurring lists.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ShoppingListSchedule' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Shopping]
+      summary: Create a recurring list; its first list is made at once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShoppingListScheduleInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ShoppingListSchedule' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /shopping/schedules/{schedule}:
+    parameters:
+      - name: schedule
+        in: path
+        required: true
+        schema: { type: string, examples: ['sls_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    get:
+      tags: [Shopping]
+      summary: One recurring list
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingListSchedule' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Shopping]
+      summary: Replace a recurring list; its open list moves to the new rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShoppingListScheduleInput' }
+      responses:
+        '200': { $ref: '#/components/responses/ShoppingListSchedule' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Shopping]
+      summary: Stop a recurring list; the lists it made stay
+      responses:
+        '204': { description: 'Stopped.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reminders:
+    get:
+      tags: [Reminders]
+      summary: The occurrences under a filter, as on the web (US-9.1)
+      description: Pending (open and not past, undated included) by due date with the undated last; overdue (open and past); completed, the latest 100 first. With `mine`, only the reminders the reader is responsible for.
+      parameters:
+        - name: filter
+          in: query
+          schema: { type: string, enum: [pending, overdue, completed], default: pending }
+        - $ref: '#/components/parameters/ReminderMine'
+      responses:
+        '200':
+          description: The occurrences.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReminderOccurrence' }
+                  meta:
+                    type: object
+                    properties:
+                      filter: { type: string }
+                      mine: { type: boolean }
+                      counts:
+                        type: object
+                        properties:
+                          pending: { type: integer }
+                          overdue: { type: integer }
+                          completed: { type: integer }
+                      assignees:
+                        type: array
+                        description: Who may be made responsible for a reminder of the reader's default workspace.
+                        items: { $ref: '#/components/schemas/UserSummary' }
+                      assignees_by_workspace:
+                        type: object
+                        description: Who may be made responsible, per workspace (friendly id) the reader has the module in.
+                        additionalProperties:
+                          type: array
+                          items: { $ref: '#/components/schemas/UserSummary' }
+                      timezone: { $ref: '#/components/schemas/Timezone' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Reminders]
+      summary: Create a reminder or task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReminderInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Reminder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /agenda:
+    get:
+      tags: [Reminders]
+      summary: Everything scheduled in a period, as the web's calendar
+      description: >-
+        The items starting in [`from`, `to`) — at most 62 days apart — from every
+        source the reader may see: `reminders` and `events` of the agenda, the
+        sending of `invoices` (an invoice not sent yet is all day on its issue
+        date), the reader's own scheduled `whatsapp` messages and the deadlines
+        of the recurring `shopping` lists and the events of the reader's own
+        connected `google` calendars (read only; `url` opens them in Google). Coming runs of
+        a schedule are `is_projected`. Sorted by day in the reader's timezone,
+        all-day items first. With `mine`, only the reminders and events the
+        reader is responsible for; `hide` leaves sources out.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, examples: ['2026-10-01', '2026-10-01T03:00:00Z'] }, description: 'A date (midnight in the reader''s timezone) or an instant.' }
+        - { name: to, in: query, required: true, schema: { type: string, examples: ['2026-11-01'] }, description: 'Exclusive; after `from`.' }
+        - $ref: '#/components/parameters/ReminderMine'
+        - name: 'hide[]'
+          in: query
+          schema: { type: array, items: { type: string, enum: [reminders, events, invoices, whatsapp, shopping, google] } }
+      responses:
+        '200':
+          description: The calendar of the period.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CalendarEntry' }
+                  meta:
+                    type: object
+                    properties:
+                      from: { type: string, format: date-time }
+                      to: { type: string, format: date-time }
+                      mine: { type: boolean }
+                      sources: { type: array, items: { type: string }, description: 'The sources the reader may see.' }
+                      assignees: { type: array, items: { $ref: '#/components/schemas/UserSummary' }, description: 'Who may be made responsible for a reminder of the reader''s default workspace.' }
+                      assignees_by_workspace:
+                        type: object
+                        description: Who may be made responsible, per workspace (friendly id) the reader has the module in.
+                        additionalProperties:
+                          type: array
+                          items: { $ref: '#/components/schemas/UserSummary' }
+                      timezone: { $ref: '#/components/schemas/Timezone' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /reminders/agenda:
+    get:
+      tags: [Reminders]
+      summary: The open occurrences by day, as the web's agenda
+      description: >-
+        Groups in order: `overdue`, then each day (`YYYY-MM-DD` in the reader's
+        timezone), then `undated`; empty ones are left out. The coming runs of
+        the repeating reminders are projected for the next `meta.projection_days`
+        days as entries with `is_projected` and no `occurrence`: they cannot be
+        completed until their occurrence exists. With `mine`, only the
+        reminders the reader is responsible for.
+      parameters:
+        - $ref: '#/components/parameters/ReminderMine'
+      responses:
+        '200':
+          description: The agenda.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string, examples: [overdue, '2026-10-05', undated] }
+                        date: { type: [string, 'null'], format: date, description: 'The day; null for `overdue` and `undated`.' }
+                        entries:
+                          type: array
+                          items: { $ref: '#/components/schemas/ReminderAgendaEntry' }
+                  meta:
+                    type: object
+                    properties:
+                      mine: { type: boolean }
+                      projection_days: { type: integer, examples: [14] }
+                      assignees:
+                        type: array
+                        items: { $ref: '#/components/schemas/UserSummary' }
+                      assignees_by_workspace:
+                        type: object
+                        description: Who may be made responsible, per workspace (friendly id) the reader has the module in.
+                        additionalProperties:
+                          type: array
+                          items: { $ref: '#/components/schemas/UserSummary' }
+                      timezone: { $ref: '#/components/schemas/Timezone' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /reminders/{reminder}:
+    parameters:
+      - name: reminder
+        in: path
+        required: true
+        schema: { type: string, examples: ['rem_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    get:
+      tags: [Reminders]
+      summary: One reminder or event, with its open occurrence and who may be made responsible (meta.assignees)
+      responses:
+        '200': { $ref: '#/components/responses/Reminder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Reminders]
+      summary: Replace a reminder (the whole form; no date nor recurrence makes it undated)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReminderInput' }
+      responses:
+        '200': { $ref: '#/components/responses/Reminder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Reminders]
+      summary: Delete a reminder (soft delete; its recurrence is paused)
+      responses:
+        '204': { description: 'Deleted.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reminder-occurrences/{occurrence}/complete:
+    parameters:
+      - $ref: '#/components/parameters/ReminderOccurrence'
+    post:
+      tags: [Reminders]
+      summary: Complete an occurrence; a repeating reminder gets its next one
+      responses:
+        '200': { $ref: '#/components/responses/ReminderOccurrence' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /reminder-occurrences/{occurrence}/reopen:
+    parameters:
+      - $ref: '#/components/parameters/ReminderOccurrence'
+    post:
+      tags: [Reminders]
+      summary: Take back the completion of an occurrence
+      responses:
+        '200': { $ref: '#/components/responses/ReminderOccurrence' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/accounts:
+    get:
+      tags: [WhatsApp]
+      summary: The user's own WhatsApp numbers, read only (US-7.2)
+      description: Connecting a number by QR code, reconnecting and removing it are web only.
+      responses:
+        '200':
+          description: The accounts by nickname.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappAccount' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /whatsapp/accounts/{account}/targets:
+    parameters:
+      - name: account
+        in: path
+        required: true
+        schema: { type: string, examples: ['wacc_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    get:
+      tags: [WhatsApp]
+      summary: The account's contacts and groups (US-7.3)
+      parameters:
+        - name: search
+          in: query
+          description: By name or number.
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+      responses:
+        '200':
+          description: A page of targets, contacts first and then by name.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/WhatsappTarget' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/chats:
+    get:
+      tags: [WhatsApp]
+      summary: The one-to-one chats, latest received first (reply keyboard)
+      description: |
+        The chats of all the user's accounts where the contact sent
+        something, the latest received message first. The messages are kept
+        from the Evolution API webhooks (`messages.upsert`, and the history
+        handed over on linking, `messages.set`); groups never are.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: A page of chats.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/WhatsappChat' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /whatsapp/chats/{chat}/messages:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        description: The friendly id of the contact (a WhatsApp target).
+        schema: { type: string, examples: ['wtgt_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    get:
+      tags: [WhatsApp]
+      summary: The latest 20 messages of a chat, newest first (reply keyboard)
+      responses:
+        '200':
+          description: The messages, both ways.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappChatMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/chat-messages/{message}/reply:
+    parameters:
+      - name: message
+        in: path
+        required: true
+        description: The friendly id of a message the contact sent.
+        schema: { type: string, examples: ['wchm_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    post:
+      tags: [WhatsApp]
+      summary: Draft the answer to a message in the user's style (reply keyboard)
+      description: |
+        The `laravel/ai` agent of the active AI provider connection writes
+        the answer from the chat so far and the user's own messages as style
+        samples, following `instruction` when given. Nothing is sent: the
+        keyboard puts the text in WhatsApp's field. 20 per minute per user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instruction: { type: [string, 'null'], maxLength: 2000, example: diz que não posso mas sugere quinta }
+      responses:
+        '200':
+          description: The draft.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string }
+              example: { text: 'sexta não rola 😕 quinta pode?' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502':
+          description: The AI provider failed; try again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: No AI provider connection is active.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /whatsapp/messages:
+    get:
+      tags: [WhatsApp]
+      summary: The user's scheduled messages, newest first (US-7.3)
+      responses:
+        '200':
+          description: The messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [WhatsApp]
+      summary: Schedule a message, once or recurring
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WhatsappMessageInput' }
+      responses:
+        '201': { $ref: '#/components/responses/WhatsappMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/messages/{message}:
+    parameters:
+      - $ref: '#/components/parameters/WhatsappMessage'
+    get:
+      tags: [WhatsApp]
+      summary: A message
+      responses:
+        '200': { $ref: '#/components/responses/WhatsappMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [WhatsApp]
+      summary: Replace a message (the whole form); a cancelled one cannot be edited
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WhatsappMessageInput' }
+      responses:
+        '200': { $ref: '#/components/responses/WhatsappMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [WhatsApp]
+      summary: Delete a message (soft delete; its schedule is paused)
+      responses:
+        '204': { description: 'Deleted.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/messages/{message}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/WhatsappMessage'
+    post:
+      tags: [WhatsApp]
+      summary: Cancel a `once` message before its time
+      responses:
+        '200': { $ref: '#/components/responses/WhatsappMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/messages/{message}/pause:
+    parameters:
+      - $ref: '#/components/parameters/WhatsappMessage'
+    post:
+      tags: [WhatsApp]
+      summary: Pause a message; nothing is sent until it is resumed
+      responses:
+        '200': { $ref: '#/components/responses/WhatsappMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/messages/{message}/resume:
+    parameters:
+      - $ref: '#/components/parameters/WhatsappMessage'
+    post:
+      tags: [WhatsApp]
+      summary: Resume a message; the runs missed while paused are skipped
+      responses:
+        '200': { $ref: '#/components/responses/WhatsappMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/send-now:
+    post:
+      tags: [WhatsApp]
+      summary: Send a message right away, without scheduling (US-7.5)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WhatsappSendingInput' }
+      responses:
+        '202':
+          description: One `manual` delivery per target; the sending goes on in the queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappDelivery' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/deliveries:
+    get:
+      tags: [WhatsApp]
+      summary: The history of deliveries from the user's accounts, newest first (US-7.5)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: A page of deliveries.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/WhatsappDelivery' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /voice/commands:
+    post:
+      tags: [Voice]
+      summary: Run a spoken command through the remote interpreter (US-10.2, US-10.3)
+      description: |
+        The text from the app's speech-to-text goes to the `laravel/ai` agent
+        of the active AI provider connection, which maps it to one action;
+        the action runs exactly as in `POST /voice/actions`. A text no action
+        fits is `failed`, with the agent's reply as the message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 1000, example: adicione leite na lista de compras dessa semana }
+      responses:
+        '200':
+          description: What the command came to.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoiceCommandResult' }
+              example:
+                action: shopping.add_item
+                status: done
+                message: Added "leite" to "Compras da semana".
+                parameters: { item: leite, quantity: null, list: dessa semana }
+                clarification: null
+                confirmation: null
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502':
+          description: The AI provider failed; try again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: No AI provider connection is active (`AI provider not configured`, translated).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /voice/actions:
+    post:
+      tags: [Voice]
+      summary: Run an action structured by the app's on-device interpreter (US-10.2, US-10.3)
+      description: |
+        The same executor as `POST /voice/commands`, so both produce the same
+        effect. Also used to answer a `needs_clarification`: the same
+        `parameters`, with the picked option's `id` as the parameter named by
+        `clarification.parameter`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VoiceActionInput' }
+      responses:
+        '200':
+          description: What the action came to.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoiceCommandResult' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /voice/commands/confirm:
+    post:
+      tags: [Voice]
+      summary: Confirm a voice WhatsApp send (US-10.3, US-7.4)
+      description: |
+        Sends the message kept under the token of a `needs_confirmation`
+        answer, as one `voice` delivery. A token works once, for 5 minutes,
+        only for the user it was issued to. Needs the WhatsApp module.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation_token]
+              properties:
+                confirmation_token: { type: string }
+      responses:
+        '200':
+          description: '`done` (the sending goes on in the queue), or `failed` when the account can no longer send.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoiceCommandResult' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /whatsapp/conversations:
+    get:
+      tags: [WhatsApp]
+      summary: Every chat of the user's numbers, pinned first, then the latest message first (WhatsApp screen)
+      description: |
+        Contacts and groups with a message, or pinned, of all the user's
+        accounts or one. The apps poll it while the screen is open.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 30 }
+        - name: account
+          in: query
+          description: The friendly id of one of the user's accounts.
+          schema: { type: string }
+        - name: search
+          in: query
+          description: Part of the name, nickname or number.
+          schema: { type: string }
+        - name: tag
+          in: query
+          description: The friendly id of one of the user's tags.
+          schema: { type: string }
+        - name: sort
+          in: query
+          description: '`priority`: the highest priority first, after the pinned chats.'
+          schema: { type: string, enum: [recent, priority], default: recent }
+        - name: archived
+          in: query
+          description: '`1` lists only the archived chats; otherwise they are left out, unless searching.'
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: A page of chats.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/WhatsappConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [WhatsApp]
+      summary: The chat with a number, started when there is none yet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account, number]
+              properties:
+                account: { type: string, description: 'The friendly id of one of the user''s numbers.' }
+                number: { type: string, examples: ['+5511999990000'] }
+      responses:
+        '201':
+          description: The chat.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WhatsApp]
+      summary: A chat, with its scheduled messages and open reminders
+      responses:
+        '200':
+          description: The chat.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversation' }
+                  scheduled:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappChatItem' }
+                  reminders:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappChatItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [WhatsApp]
+      summary: Pin, prioritize, nickname, tag, archive, mark unread, mute or block a chat, or change its settings
+      description: |
+        Only the fields sent change. The settings take true, false or null to
+        follow the number. Archiving and marking unread reach WhatsApp while
+        the number is connected; muting is Jarvis' own (no pushes); blocking
+        (a contact only) needs the number connected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pinned: { type: boolean }
+                priority: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+                nickname: { type: [string, 'null'] }
+                tags: { type: array, items: { type: string }, description: 'Friendly ids of the user''s tags; replaces them all.' }
+                sends_read_receipts: { type: [boolean, 'null'] }
+                sends_typing: { type: [boolean, 'null'] }
+                notifies_messages: { type: [boolean, 'null'] }
+                archived: { type: boolean }
+                marked_unread: { type: boolean }
+                muted: { type: [string, 'null'], enum: ['8h', '1w', always, null], description: 'null unmutes.' }
+                blocked: { type: boolean }
+      responses:
+        '200':
+          description: The chat.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/sync:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Fetch the chat's messages again from WhatsApp
+      responses:
+        '200':
+          description: How many messages were new.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  added: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The number is not connected. }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { description: WhatsApp could not be reached. }
+
+  /whatsapp/conversations/{chat}/draft:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: An answer drafted by the AI in the user's style, for the composer
+      description: To the picked messages, or to what the contact sent since the user's last message (up to 10; else the latest one the contact sent), following `instruction` when given. Nothing is sent.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messages: { type: array, items: { type: string }, description: 'Friendly ids of messages of the chat.' }
+                instruction: { type: [string, 'null'], maxLength: 2000, description: 'What the answer must say; in a group, the members it mentions as @ and their number are mentioned in the answer. Required with `without_context`.' }
+                without_context: { type: boolean, description: 'A new message from the instruction alone, without reading the chat.' }
+      responses:
+        '200':
+          description: The draft.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { description: The AI provider failed. }
+        '503': { description: No AI connection is set up for WhatsApp replies. }
+
+  /whatsapp/conversations/{chat}/reminders:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: A reminder about the chat, or some of its messages
+      description: An ordinary reminder (the `reminders` module is needed too); `due_at` as the reminders API reads it. The picked messages are all quoted in its note, in the order they were sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                due_at: { type: string }
+                messages:
+                  type: array
+                  maxItems: 20
+                  items: { type: string }
+                  description: The friendly ids of messages of the chat.
+                message: { type: [string, 'null'], description: 'The friendly id of one message of the chat (as one item of `messages`).' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappChatItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/schedule:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Send a text or a file to the chat later, once
+      description: '`at` as the scheduled messages read `starts_at`. A file (multipart) goes with the text as its caption, which is then optional; an audio goes as a voice note, without text. Cancel it with `POST /whatsapp/messages/{message}/cancel`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, at]
+              properties:
+                text: { type: string }
+                at: { type: string }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [at]
+              properties:
+                text: { type: string }
+                at: { type: string }
+                file: { type: string, format: binary, description: 'An image, a video, a document or an audio, up to 12 MB.' }
+      responses:
+        '201':
+          description: Scheduled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappChatItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/messages/{message}/reaction:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+      - name: message
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: React to a message of the chat
+      description: One reaction per person; the same emoji again, or an empty one, removes it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties:
+                emoji: { type: string, maxLength: 32 }
+      responses:
+        '200':
+          description: The owner's reaction now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emoji: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/forward:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Forward messages of the chat to other chats of its number
+      description: Each goes again as a new message (a text, or its file and caption); WhatsApp does not mark it forwarded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages, to]
+              properties:
+                messages: { type: array, maxItems: 20, items: { type: string } }
+                to: { type: array, maxItems: 5, items: { type: string }, description: 'Friendly ids of chats of the same number.' }
+      responses:
+        '202':
+          description: Queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveries: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/search:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WhatsApp]
+      summary: The messages of the chat with every word searched for, newest first (up to 50)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+      responses:
+        '200':
+          description: The messages found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappConversationMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/starred:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WhatsApp]
+      summary: The messages the owner starred in the chat, latest starred first (up to 50)
+      responses:
+        '200':
+          description: The starred messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappConversationMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/conversations/{chat}/gallery:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WhatsApp]
+      summary: The photos and videos, documents or links of the chat, newest first, 50 at a time
+      parameters:
+        - name: kind
+          in: query
+          schema: { type: string, enum: [media, documents, links], default: media }
+        - name: before
+          in: query
+          description: The friendly id of the last one shown.
+          schema: { type: string }
+      responses:
+        '200':
+          description: A page of the gallery.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappConversationMessage' }
+                  meta:
+                    type: object
+                    properties:
+                      has_more: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/messages/{message}/star:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+      - name: message
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Star or unstar a message (kept in Jarvis only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [starred]
+              properties:
+                starred: { type: boolean }
+      responses:
+        '200':
+          description: The message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversationMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/messages/{message}:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+      - name: message
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [WhatsApp]
+      summary: Edit the text or caption of a message the number sent, within WhatsApp's 15 minutes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 4096 }
+      responses:
+        '200':
+          description: The message, edited.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversationMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+    delete:
+      tags: [WhatsApp]
+      summary: Delete for everyone a message the number sent, within about two and a half days
+      description: Jarvis keeps it, marked as deleted (`revoked`).
+      responses:
+        '200':
+          description: The message, deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversationMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/messages/{message}/info:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+      - name: message
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WhatsApp]
+      summary: How far a message the number sent got, and when
+      description: The times are only known in a one-to-one chat (`per_member`); in a group WhatsApp does not tell Jarvis.
+      responses:
+        '200':
+          description: The message info.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      friendly_id: { type: string }
+                      sent_at: { $ref: '#/components/schemas/DateTime' }
+                      receipt: { type: [string, 'null'], enum: [failed, pending, sent, delivered, read, played, null] }
+                      delivered_at: { $ref: '#/components/schemas/NullableDateTime' }
+                      read_at: { $ref: '#/components/schemas/NullableDateTime' }
+                      played_at: { $ref: '#/components/schemas/NullableDateTime' }
+                      per_member: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/conversations/{chat}/poll:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Send a poll to the chat
+      description: Votes show in the chat as WhatsApp reports them; the Evolution API has no way to vote.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question, options]
+              properties:
+                question: { type: string, maxLength: 255 }
+                options: { type: array, minItems: 2, maxItems: 10, items: { type: string, maxLength: 100 } }
+                multiple: { type: boolean, description: 'More than one answer per person.' }
+                reply_to: { type: string }
+      responses:
+        '202':
+          description: Queued to send; it shows in the chat once WhatsApp reports it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappDelivery' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/location:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Send a location to the chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number, minimum: -90, maximum: 90 }
+                longitude: { type: number, minimum: -180, maximum: 180 }
+                name: { type: string, maxLength: 255 }
+                address: { type: string, maxLength: 500 }
+                reply_to: { type: string }
+      responses:
+        '202':
+          description: Queued to send; it shows in the chat once WhatsApp reports it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappDelivery' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/contacts:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Send contact cards of the number's contacts to the chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contacts]
+              properties:
+                contacts: { type: array, minItems: 1, maxItems: 10, items: { type: string }, description: 'Friendly ids of contact chats of the same number.' }
+      responses:
+        '202':
+          description: Queued to send; it shows in the chat once WhatsApp reports it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappDelivery' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/sticker:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Send an image as a sticker to the chat
+      description: A WebP goes as it is; a PNG or JPEG becomes a still sticker.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: 'WebP, PNG or JPEG, up to 1 MB.' }
+                reply_to: { type: string }
+      responses:
+        '202':
+          description: Queued to send; it shows in the chat once WhatsApp reports it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappDelivery' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/groups:
+    post:
+      tags: [WhatsApp]
+      summary: Create a WhatsApp group on one of the user's numbers
+      description: The number is its admin. WhatsApp leaves out, without a word, who is not on it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account, subject, members]
+              properties:
+                account: { type: string }
+                subject: { type: string, maxLength: 100 }
+                members: { type: array, minItems: 1, items: { type: string }, description: 'Friendly ids of contact chats of the number.' }
+                description: { type: string, maxLength: 2048 }
+      responses:
+        '201':
+          description: The group's chat.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/group:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WhatsApp]
+      summary: A group's info, permissions and members, as WhatsApp has them now
+      responses:
+        '200':
+          description: The group.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappGroup' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp could not be reached. }
+    patch:
+      tags: [WhatsApp]
+      summary: Change a group's subject, description, permissions or disappearing messages
+      description: Only the fields sent change. WhatsApp refuses (502) what only an admin may do when the number is none.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject: { type: string, maxLength: 100 }
+                description: { type: [string, 'null'], maxLength: 2048 }
+                admins_only: { type: boolean, description: 'Only admins send messages.' }
+                info_admins_only: { type: boolean, description: 'Only admins edit the group info.' }
+                ephemeral_seconds: { type: integer, enum: [0, 86400, 604800, 7776000] }
+      responses:
+        '200':
+          description: The group.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappGroup' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/group/picture:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Change a group's picture
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: 'JPEG or PNG, up to 5 MB.' }
+      responses:
+        '204': { description: Changed; the new picture comes with the chat's next refresh. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/group/members:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: Add, remove, promote or demote members of a group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, participants]
+              properties:
+                action: { type: string, enum: [add, remove, promote, demote] }
+                participants: { type: array, minItems: 1, maxItems: 50, items: { type: string }, description: 'Numbers with the country code, or JIDs.' }
+      responses:
+        '200':
+          description: Whether WhatsApp did it for each, and the members now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results: { type: object, additionalProperties: { type: boolean }, description: 'By JID.' }
+                  members:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappGroupMember' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/group/invite:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: The link to join a group; a new one with `revoke`
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revoke: { type: boolean }
+      responses:
+        '200':
+          description: The link.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/conversations/{chat}/group/leave:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: The number leaves a group; the chat stays, archived
+      responses:
+        '200':
+          description: The chat.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: WhatsApp did not take it. }
+
+  /whatsapp/tags:
+    get:
+      tags: [WhatsApp]
+      summary: The user's tags for chats, by name
+      responses:
+        '200':
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappTag' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [WhatsApp]
+      summary: Create a tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, color]
+              properties:
+                name: { type: string, maxLength: 40, description: 'Unique per user, whatever the case.' }
+                color: { type: string, description: 'A key of the palette.' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappTag' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/tags/{tag}:
+    parameters:
+      - name: tag
+        in: path
+        required: true
+        schema: { type: string, examples: ['wtag_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    patch:
+      tags: [WhatsApp]
+      summary: Rename or recolor a tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 40 }
+                color: { type: string }
+      responses:
+        '200':
+          description: The tag.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappTag' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [WhatsApp]
+      summary: Delete a tag, off every chat
+      responses:
+        '204': { description: Deleted. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/priority-colors:
+    get:
+      tags: [WhatsApp]
+      summary: The palette and the color of each priority
+      responses:
+        '200':
+          description: The colors.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhatsappPriorityColors' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [WhatsApp]
+      summary: Set the color of each priority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                colors:
+                  type: object
+                  description: '`{"1": "red", …}`, keys of the palette; one left out or null takes its default.'
+                  additionalProperties: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: The colors.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhatsappPriorityColors' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/chat-settings/{account}:
+    parameters:
+      - name: account
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [WhatsApp]
+      summary: The defaults of a number's chats
+      description: Only the fields sent change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sends_read_receipts: { type: boolean }
+                sends_typing: { type: boolean }
+                notifies_messages: { type: boolean }
+                syncs_phone_reads: { type: boolean }
+      responses:
+        '200':
+          description: The number.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappAccount' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/messages:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        description: The friendly id of the contact or group (a WhatsApp target).
+        schema: { type: string, examples: ['wtgt_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    get:
+      tags: [WhatsApp]
+      summary: 40 messages of a chat, newest first, older than `before` when given
+      description: |
+        The first page (without `before`) also asks WhatsApp for the chat's
+        presence, at most every 10 minutes per chat: who is typing, recording
+        or online then comes as `whatsapp.chat.presence` on the user's
+        private channel (`private-App.Models.User.{id}`).
+      parameters:
+        - name: before
+          in: query
+          description: The friendly id of a message of the chat; the page holds the ones before it.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The messages, both ways, and on the first page what Jarvis is still sending.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WhatsappConversationMessage' }
+                  outgoing:
+                    type: array
+                    description: Texts sent from Jarvis in the last day still pending or failed; empty with `before`.
+                    items: { $ref: '#/components/schemas/WhatsappDelivery' }
+                  meta:
+                    type: object
+                    properties:
+                      has_more: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [WhatsApp]
+      summary: Send a text, or a file with its caption, to the chat now
+      description: |
+        Sent from the chat's own number. The message shows in the chat once
+        WhatsApp reports it; until then it is among `outgoing`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, description: 'In a group, each `@` followed by a number with its country code mentions that member.' }
+                reply_to: { type: string, description: 'The friendly id of a message of the chat it answers (quoted).' }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                text: { type: string, description: 'The caption.' }
+                file: { type: string, format: binary }
+                reply_to: { type: string, description: 'Not sent with a voice note: WhatsApp gets no quote with one.' }
+      responses:
+        '202':
+          description: Queued to send.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WhatsappDelivery' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /whatsapp/conversations/{chat}/read:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: The user saw the chat
+      description: |
+        The unread count goes back to 0. When the chat sends read receipts
+        (set on the web, per number and per chat; off by default) WhatsApp
+        is told too.
+      responses:
+        '204': { description: Marked read. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /whatsapp/conversations/{chat}/typing:
+    parameters:
+      - name: chat
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [WhatsApp]
+      summary: The user is typing (call every few seconds while they do)
+      description: When the chat sends "typing…" (set on the web; off by default) the contact sees it for a few seconds. 30 per minute.
+      responses:
+        '200':
+          description: Whether the contact was shown "typing…".
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shown: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /whatsapp/media/{message}:
+    parameters:
+      - name: message
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WhatsApp]
+      summary: The file of a chat media (the signed `media.url` of a message)
+      description: |
+        No token: the URL is signed and temporary, as handed in
+        `WhatsappConversationMessage.media.url`; use it as is. The file is
+        fetched from WhatsApp the first time. `?download=1` answers it as
+        an attachment under its WhatsApp name.
+      security: []
+      responses:
+        '200':
+          description: The file.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { description: WhatsApp could not hand the file over. }
+
+  /chats/providers:
+    get:
+      tags: [Chats]
+      summary: The channels the user may use, with what each supports and the user's accounts on it
+      description: |
+        Only the channels switched on for the user (by the administrator,
+        for the workspace and for the member) and active. `capabilities`
+        is what the channel supports in general; a conversation's own
+        `capabilities` (`GET /chats/conversations/{conversation}`) may be
+        narrower (read only when the account failed or the user left it).
+      responses:
+        '200':
+          description: The channels.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatProvider' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /chats/conversations:
+    get:
+      tags: [Chats]
+      summary: The conversations of every channel, pinned first then by the latest message
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: sort
+          in: query
+          schema: { type: string, enum: [recent, priority], default: recent }
+          description: '`priority`: pinned, then priority 1 to 5 (none last), then the latest message.'
+        - name: provider
+          in: query
+          schema: { type: string, examples: [slack] }
+          description: Only this channel.
+        - name: tag
+          in: query
+          schema: { type: string }
+          description: Only the conversations with this tag (its friendly id).
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Part of the name or the nickname.
+        - name: archived
+          in: query
+          schema: { type: boolean, default: false }
+          description: The archived ones instead of the live ones.
+      responses:
+        '200':
+          description: 50 per page.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ChatConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /chats/conversations/{conversation}:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    get:
+      tags: [Chats]
+      summary: One conversation, with what its channel supports on it and its pending scheduled messages
+      responses:
+        '200':
+          description: The conversation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatConversation' }
+                  scheduled:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatScheduledMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Chats]
+      summary: What Jarvis keeps about the conversation, any of the fields
+      description: 'Every field is kept in Jarvis only; the channel is not told. `unread: false` also tells the channel the conversation was read when it supports `mark_read`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pinned: { type: boolean }
+                priority: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+                nickname: { type: [string, 'null'], maxLength: 100 }
+                archived: { type: boolean }
+                mute: { type: [string, 'null'], enum: [8h, 1w, always, null], description: '`null` unmutes.' }
+                unread: { type: boolean, description: '`true` marks it unread, `false` reads it.' }
+                tags: { type: array, items: { type: string }, description: 'The friendly ids of the tags it gets; the others are taken off.' }
+      responses:
+        '200':
+          description: The conversation as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/conversations/{conversation}/read:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    post:
+      tags: [Chats]
+      summary: The user saw the conversation
+      description: The unread count goes back to 0, and the channel is told when it supports `mark_read`.
+      responses:
+        '200':
+          description: The conversation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /chats/conversations/{conversation}/sync:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    post:
+      tags: [Chats]
+      summary: Fetch the conversation and its latest messages from the channel, or older ones
+      description: 10 requests per minute per user. With `older_than`, the messages before that one are fetched instead (when the channel supports `history`).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                older_than: { type: string, description: The id of a message of the conversation. }
+      responses:
+        '200':
+          description: The conversation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /chats/conversations/{conversation}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    get:
+      tags: [Chats]
+      summary: The latest messages of the conversation, oldest first, or the ones before a message
+      description: Messages are read from what Jarvis keeps of the channel; `POST …/sync` fetches more. Replies in threads are not among them (`GET …/messages/{message}/thread`).
+      parameters:
+        - name: before
+          in: query
+          schema: { type: string }
+          description: The id of a message; the page holds the ones before it.
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+      responses:
+        '200':
+          description: The messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatMessage' }
+                  meta:
+                    type: object
+                    properties:
+                      has_older: { type: boolean, description: 'Whether there are older ones, kept here or still on the channel.' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Chats]
+      summary: Send a text and/or files to the conversation, or into a thread
+      description: |
+        Needs `capabilities.send`; `files` need `capabilities.files` and
+        `thread_id` needs `capabilities.threads`. On Slack, `@handle`
+        mentions a member of the conversation, and `*bold*`, `_italic_`,
+        `~strike~` and `` `code` `` go through as formatting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 4000 }
+                thread_id: { type: string, description: 'The id of the message whose thread it answers in.' }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                text: { type: string, maxLength: 4000 }
+                thread_id: { type: string }
+                files: { type: array, maxItems: 10, items: { type: string, format: binary } }
+      responses:
+        '201':
+          description: The message as the channel kept it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/conversations/{conversation}/messages/{message}:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+      - $ref: '#/components/parameters/ChatMessage'
+    patch:
+      tags: [Chats]
+      summary: Edit a message of the user's own on the channel
+      description: Needs `capabilities.edit_messages` and the message's `can_edit`. 30 requests per minute per user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 4000 }
+      responses:
+        '200':
+          description: The message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    delete:
+      tags: [Chats]
+      summary: Delete a message of the user's own on the channel
+      description: Needs `capabilities.delete_messages` and the message's `can_delete`. 30 requests per minute per user.
+      responses:
+        '204': { description: Deleted. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /chats/conversations/{conversation}/messages/{message}/thread:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+      - $ref: '#/components/parameters/ChatMessage'
+    get:
+      tags: [Chats]
+      summary: The thread of a message, the message first then its replies
+      description: Needs `capabilities.threads`. The replies not kept yet are fetched from the channel.
+      responses:
+        '200':
+          description: The thread.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/conversations/{conversation}/messages/{message}/reaction:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+      - $ref: '#/components/parameters/ChatMessage'
+    post:
+      tags: [Chats]
+      summary: React to a message, or take the reaction back
+      description: Needs `capabilities.reactions`; the emoji must be among `capabilities.reaction_emojis` when the channel lists them. 60 requests per minute per user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties:
+                emoji: { type: string, examples: ['👍'] }
+                on: { type: boolean, default: true, description: '`false` takes the reaction back.' }
+      responses:
+        '200':
+          description: The message as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /chats/conversations/{conversation}/draft:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    post:
+      tags: [Chats]
+      summary: Have the AI write a reply, in the user's style
+      description: |
+        Answers the messages given, or without `message_ids` the latest
+        ones received since the user's last message; with `compose: true`
+        and no messages, writes a new message from the `instruction`
+        alone. 20 requests per minute per user. Mentions by `@handle` in
+        the instruction are kept when the channel supports them.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message_ids: { type: array, maxItems: 20, items: { type: string } }
+                instruction: { type: string, maxLength: 2000, description: 'What the message must say, or how.' }
+                compose: { type: boolean, default: false }
+      responses:
+        '200':
+          description: The draft; nothing is sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      text: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503':
+          description: No AI provider is set up.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /chats/conversations/{conversation}/reminders:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    post:
+      tags: [Chats]
+      summary: A reminder from the conversation, quoting the messages picked
+      description: Needs the Reminders module. The reminder's note holds the channel, the conversation and the messages quoted; the reminder links back to the conversation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, maxLength: 120 }
+                due_at: { type: string, description: "`Y-m-d H:i` in the user's timezone; tomorrow at 9 when left out." }
+                workspace: { type: string, description: 'The friendly id of the workspace it goes to; the first one with the Reminders module when left out.' }
+                message_ids: { type: array, items: { type: string } }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Reminder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/conversations/{conversation}/schedule:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    post:
+      tags: [Chats]
+      summary: Schedule a message to the conversation, once or repeating
+      description: Sent by Jarvis as the user once at `send_at`, or as `recurrence` says. With `ai_prompt` instead of `body`, the AI writes the message at each sending, reading the latest messages of the conversation (503 without an AI set up). Each sending is kept in the history. Cancelled with `DELETE /chats/scheduled/{scheduled}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body: { type: string, maxLength: 4000, description: 'Required without `ai_prompt`.' }
+                ai_prompt: { type: string, maxLength: 2000, description: 'What the AI should write at each sending, instead of `body`.' }
+                poll:
+                  allOf:
+                    - $ref: '#/components/schemas/WhatsappPollInput'
+                  description: 'A poll sent instead of `body`, without `ai_prompt` (needs `capabilities.polls`). Errors under `poll.*`.'
+                send_at: { type: string, description: "`Y-m-d H:i` in the user's timezone, ahead of now. Required without `recurrence`." }
+                recurrence: { $ref: '#/components/schemas/RecurrenceInput' }
+                thread_id: { type: string, description: 'The id of the message whose thread it goes into (needs `capabilities.threads`).' }
+      responses:
+        '201':
+          description: Scheduled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatScheduledMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { description: No AI is set up for an `ai_prompt`. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/conversations/{conversation}/contact:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+    post:
+      tags: [Chats]
+      summary: Say who the conversation is with, linking it to the same person on another channel
+      description: |
+        One of `conversation` (the same person's conversation on another
+        channel: both go under one contact, made if needed), `contact`
+        (an existing contact) or `name` (a new contact). A conversation
+        belongs to one contact at a time.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation: { type: string, description: "Another conversation's friendly id." }
+                contact: { type: string, description: "A contact's friendly id." }
+                name: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: The conversation, with its contact.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Chats]
+      summary: Take the conversation off its contact
+      description: A contact left with no conversation is deleted.
+      responses:
+        '200':
+          description: The conversation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatConversation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /chats/tags:
+    get:
+      tags: [Chats]
+      summary: The user's tags for conversations, by name
+      responses:
+        '200':
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatTag' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Chats]
+      summary: Create a tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, color]
+              properties:
+                name: { type: string, maxLength: 40, description: 'Unique per user, whatever the case.' }
+                color: { type: string, description: 'A key of the priority palette (`GET /whatsapp/priority-colors`).' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatTag' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/tags/{tag}:
+    parameters:
+      - name: tag
+        in: path
+        required: true
+        schema: { type: string, examples: ['ctag_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    patch:
+      tags: [Chats]
+      summary: Rename or recolor a tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 40 }
+                color: { type: string }
+      responses:
+        '200':
+          description: The tag.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatTag' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Chats]
+      summary: Delete a tag, off every conversation
+      responses:
+        '204': { description: Deleted. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /chats/contacts:
+    get:
+      tags: [Chats]
+      summary: The user's contacts (the people behind conversations on several channels), by name
+      responses:
+        '200':
+          description: The contacts, each with the ids of its conversations.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatContact' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /chats/contacts/{contact}:
+    parameters:
+      - name: contact
+        in: path
+        required: true
+        schema: { type: string, examples: ['cct_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    patch:
+      tags: [Chats]
+      summary: Rename a contact or write notes about them
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                notes: { type: [string, 'null'], maxLength: 2000 }
+      responses:
+        '200':
+          description: The contact.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChatContact' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/scheduled/{scheduled}:
+    parameters:
+      - name: scheduled
+        in: path
+        required: true
+        schema: { type: string, examples: ['csm_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    delete:
+      tags: [Chats]
+      summary: Cancel a scheduled message not sent yet
+      responses:
+        '204': { description: Cancelled. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /chats/files/{conversation}/{message}/{file}:
+    parameters:
+      - $ref: '#/components/parameters/ChatConversation'
+      - $ref: '#/components/parameters/ChatMessage'
+      - name: file
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Chats]
+      summary: A file of a message, fetched from the channel
+      description: |
+        Not called by hand: `ChatFile.url` is this route, signed, good for
+        a day, and needs no token. Served inline; `?download=1` as an
+        attachment.
+      security: []
+      parameters:
+        - name: download
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: The file.
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '403': { description: The signature is wrong or expired. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { description: The channel did not hand the file over. }
+
+  /webhooks/evolution:
+    post:
+      tags: [Webhooks]
+      summary: Evolution API events (US-7.1, US-7.2)
+      description: Authenticated by the shared secret in the `X-Evolution-Secret` header, not by a token.
+      security:
+        - evolutionSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Whether the event was handled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [handled, ignored] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /webhooks/slack:
+    post:
+      tags: [Webhooks]
+      summary: Slack Events API
+      description: |
+        Signed by Slack (`X-Slack-Signature`, `X-Slack-Request-Timestamp`;
+        HMAC-SHA256 of `v0:{timestamp}:{body}` with the signing secret,
+        5 minutes of tolerance), not by a token. Answers the
+        `url_verification` challenge, queues each `event_callback` once by
+        its `event_id` (Slack retries are dropped as `duplicate`) and
+        ignores the rest.
+      security:
+        - slackSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: The challenge back, or whether the event was queued.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      challenge: { type: string }
+                  - type: object
+                    properties:
+                      status: { type: string, enum: [queued, duplicate, ignored] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A Sanctum personal access token.
+    evolutionSecret:
+      type: apiKey
+      in: header
+      name: X-Evolution-Secret
+    slackSignature:
+      type: apiKey
+      in: header
+      name: X-Slack-Signature
+      description: Slack's request signature (with `X-Slack-Request-Timestamp`).
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Workspace:
+      name: workspace
+      in: path
+      required: true
+      schema: { type: string, examples: ['wsp_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    User:
+      name: user
+      in: path
+      required: true
+      schema: { type: string, examples: ['usr_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    Invitation:
+      name: invitation
+      in: path
+      required: true
+      schema: { type: string, examples: ['inv_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    Device:
+      name: device
+      in: path
+      required: true
+      schema: { type: string, examples: ['dev_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    ShoppingList:
+      name: list
+      in: path
+      required: true
+      schema: { type: string, examples: ['shl_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    ShoppingListItem:
+      name: item
+      in: path
+      required: true
+      schema: { type: string, examples: ['shi_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    ReminderOccurrence:
+      name: occurrence
+      in: path
+      required: true
+      schema: { type: string, examples: ['remo_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    ReminderMine:
+      name: mine
+      in: query
+      description: Only the reminders the reader is responsible for.
+      schema: { type: boolean, default: false }
+    WhatsappMessage:
+      name: message
+      in: path
+      required: true
+      schema: { type: string, examples: ['wmsg_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    ChatConversation:
+      name: conversation
+      in: path
+      required: true
+      schema: { type: string, examples: ['cnv_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+    ChatMessage:
+      name: message
+      in: path
+      required: true
+      description: The id of a message as the channel's driver gives it.
+      schema: { type: string, examples: ['slm_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+
+  responses:
+    Unauthenticated:
+      description: No token, or a revoked one.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: The module is switched off for the user, or the record is someone else's.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: No such record.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: The input was refused, in the standard Laravel format.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    TooManyRequests:
+      description: Too many attempts.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TokenIssued:
+      description: A token for this device and the user.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              token: { type: string }
+              user: { $ref: '#/components/schemas/User' }
+    AdminWorkspaceSaved:
+      description: The workspace with its members.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminWorkspace' }
+    AdminWorkspaceMemberSaved:
+      description: The member.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminWorkspaceMember' }
+    AdminUserSaved:
+      description: The user.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminUser' }
+    AdminInvitationSaved:
+      description: The invitation.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminInvitation' }
+    DeviceSaved:
+      description: The device (201 the first time, 200 afterwards).
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Device' }
+    NotificationsMarked:
+      description: How many were marked and how many are still unread.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              marked: { type: integer }
+              unread_count: { type: integer }
+    ShoppingListSchedule:
+      description: The recurring list as saved.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/ShoppingListSchedule' }
+    ShoppingList:
+      description: The list with its items.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/ShoppingList' }
+    ShoppingListItem:
+      description: The item as saved.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/ShoppingListItem' }
+    Reminder:
+      description: The reminder as saved, with its open occurrences.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Reminder' }
+              meta:
+                type: object
+                properties:
+                  timezone: { $ref: '#/components/schemas/Timezone' }
+    ReminderOccurrence:
+      description: The occurrence as saved.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/ReminderOccurrence' }
+              meta:
+                type: object
+                properties:
+                  timezone: { $ref: '#/components/schemas/Timezone' }
+    WhatsappMessage:
+      description: The message as saved.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/WhatsappMessage' }
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+    Paginated:
+      type: object
+      properties:
+        links:
+          type: object
+          properties:
+            first: { type: [string, 'null'] }
+            last: { type: [string, 'null'] }
+            prev: { type: [string, 'null'] }
+            next: { type: [string, 'null'] }
+        meta:
+          type: object
+          properties:
+            current_page: { type: integer }
+            last_page: { type: integer }
+            per_page: { type: integer }
+            total: { type: integer }
+            from: { type: [integer, 'null'] }
+            to: { type: [integer, 'null'] }
+    Timezone:
+      type: string
+      description: The user's IANA timezone.
+      examples: ['America/Sao_Paulo']
+    DateTime:
+      type: string
+      format: date-time
+      description: ISO-8601 in UTC.
+      examples: ['2026-10-06T12:00:00+00:00']
+    NullableDateTime:
+      type: [string, 'null']
+      format: date-time
+      description: ISO-8601 in UTC.
+    UserSummary:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        name: { type: string }
+
+    User:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatar_url: { type: [string, 'null'] }
+        locale: { type: string, enum: [en, pt_BR] }
+        timezone: { $ref: '#/components/schemas/Timezone' }
+        is_super_admin: { type: boolean }
+        modules:
+          type: array
+          description: The modules switched on for the user (every active one for the super admin).
+          items:
+            type: object
+            properties:
+              slug: { type: string, examples: [shopping] }
+              name: { type: string }
+              is_available_on_mobile: { type: boolean }
+        workspaces:
+          type: array
+          description: The user's workspaces by name, in the color they see each in, their default and the modules on for them there.
+          items: { $ref: '#/components/schemas/MyWorkspace' }
+        broadcast_channel:
+          type: string
+          description: The user's private Reverb channel (notifications, WhatsApp statuses), to sign with `POST /broadcasting/auth`.
+          examples: ['private-App.Models.User.42']
+    WorkspaceColor:
+      type: object
+      properties:
+        name: { type: string, examples: [blue] }
+        hex: { type: string, examples: ['#007aff'] }
+    WorkspaceSummary:
+      type: object
+      description: The workspace a shared record belongs to, in the color the reader sees it in.
+      properties:
+        id: { type: string, examples: ['wsp_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+        name: { type: string }
+        color: { type: string, examples: [blue] }
+        color_hex: { type: string, examples: ['#007aff'] }
+    MyWorkspace:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string, description: 'The color the user sees it in: their own, else the workspace''s.' }
+        color_hex: { type: string }
+        workspace_color: { type: string }
+        own_color: { type: [string, 'null'] }
+        is_default: { type: boolean, description: 'Where what the user creates goes when they pick no workspace.' }
+        modules: { type: array, items: { type: string } }
+    AdminWorkspace:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+        color_hex: { type: string }
+        members_count: { type: integer }
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+        has_data: { type: boolean, description: 'Only on a single workspace. One with data cannot be deleted.' }
+        members:
+          type: array
+          description: Only on a single workspace, by name.
+          items: { $ref: '#/components/schemas/AdminWorkspaceMember' }
+    AdminWorkspaceMember:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            email: { type: string, format: email }
+            avatar_url: { type: [string, 'null'] }
+            is_super_admin: { type: boolean }
+            is_deactivated: { type: boolean }
+        color: { type: [string, 'null'] }
+        effective_color: { type: string }
+        effective_color_hex: { type: string }
+        is_default: { type: boolean }
+        modules: { type: array, items: { type: string } }
+    AdminUser:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatar_url: { type: [string, 'null'] }
+        is_super_admin: { type: boolean }
+        is_deactivated: { type: boolean }
+        last_seen_at: { $ref: '#/components/schemas/NullableDateTime' }
+        workspaces:
+          type: array
+          items: { $ref: '#/components/schemas/WorkspaceSummary' }
+    AdminInvitation:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        status: { type: string, enum: [pending, accepted, expired, revoked] }
+        workspace:
+          oneOf:
+            - { $ref: '#/components/schemas/WorkspaceSummary' }
+            - { type: 'null' }
+        modules: { type: array, items: { type: string } }
+        locale: { type: string, enum: [en, pt_BR] }
+        expires_at: { $ref: '#/components/schemas/DateTime' }
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+    AdminModule:
+      type: object
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+        is_available_on_mobile: { type: boolean }
+    Device:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        name: { type: string }
+        platform: { type: string, enum: [ios, android, web], description: "`web` is a browser the web app registered for push; it has no API token." }
+        has_push_token: { type: boolean }
+        is_current: { type: boolean }
+        last_used_at:
+          allOf: [{ $ref: '#/components/schemas/NullableDateTime' }]
+          description: "The later of the device's own mark (its registration, each push it got) and the last request made with its API token."
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: [string, 'null'], description: 'Sanitized HTML.' }
+        url: { type: [string, 'null'] }
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              url: { type: string }
+        is_read: { type: boolean }
+        created_at: { $ref: '#/components/schemas/DateTime' }
+
+    ShoppingListInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        workspace: { type: string, description: 'The workspace (friendly id) it goes to, one of the reader''s with the module; left out, their default. On an update, moves it.' }
+    ShoppingList:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        name: { type: string }
+        workspace: { $ref: '#/components/schemas/WorkspaceSummary' }
+        is_archived: { type: boolean }
+        archived_at: { $ref: '#/components/schemas/NullableDateTime' }
+        is_default: { type: boolean, description: "The default list of its workspace: a voice command that names no list adds to it. At most one per workspace." }
+        is_recurring: { type: boolean, description: 'Made by a recurring list.' }
+        schedule_id: { type: [string, 'null'], description: 'The recurring list that made it, while it is not stopped.' }
+        due_at: { $ref: '#/components/schemas/NullableDateTime', description: 'The deadline of a recurring list.' }
+        is_overdue: { type: boolean, description: 'A recurring list still open after its deadline.' }
+        completed_at: { $ref: '#/components/schemas/NullableDateTime' }
+        items_count: { type: integer }
+        unchecked_items_count: { type: integer }
+        items:
+          type: array
+          description: Only on a single list; unchecked first by position, checked at the end in the order they were checked.
+          items: { $ref: '#/components/schemas/ShoppingListItem' }
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+        updated_at: { $ref: '#/components/schemas/NullableDateTime' }
+    ShoppingListItemInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 255 }
+        quantity_note: { type: [string, 'null'], maxLength: 255 }
+    ShoppingListItem:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        list_id: { type: string, description: 'Only on a single item.' }
+        name: { type: string }
+        quantity_note: { type: [string, 'null'] }
+        position: { type: integer }
+        is_checked: { type: boolean }
+        checked_at: { $ref: '#/components/schemas/NullableDateTime' }
+        checked_by:
+          oneOf:
+            - $ref: '#/components/schemas/UserSummary'
+            - type: 'null'
+        client_updated_at: { $ref: '#/components/schemas/NullableDateTime' }
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+        updated_at: { $ref: '#/components/schemas/NullableDateTime' }
+
+    ShoppingListSchedule:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        name: { type: string }
+        workspace: { $ref: '#/components/schemas/WorkspaceSummary' }
+        next_list_content: { type: string, enum: [pending, all, template_and_pending, empty], description: 'What the next list starts with, from the last list completed.' }
+        closes_automatically: { type: boolean, description: 'A list closes by itself at its deadline.' }
+        waits_for_close: { type: boolean, description: 'With a list closed by hand: the next one is made only once it is closed.' }
+        template_items: { type: array, items: { type: string } }
+        recurrence: { $ref: '#/components/schemas/Recurrence' }
+        open_list:
+          type: [object, 'null']
+          properties:
+            friendly_id: { type: string }
+            name: { type: string }
+            due_at: { $ref: '#/components/schemas/NullableDateTime' }
+            is_overdue: { type: boolean }
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+        updated_at: { $ref: '#/components/schemas/NullableDateTime' }
+    ShoppingListScheduleInput:
+      type: object
+      required: [name, recurrence]
+      properties:
+        name: { type: string, maxLength: 100, description: 'The start of each list name.' }
+        workspace: { type: string, description: 'The workspace (friendly id) it goes to, one of the reader''s with the module; left out, their default. On an update, moves it.' }
+        recurrence: { $ref: '#/components/schemas/RecurrenceInput' }
+        next_list_content: { type: string, enum: [pending, all, template_and_pending, empty], default: pending }
+        closes_automatically: { type: boolean, default: true }
+        waits_for_close: { type: boolean, default: false, description: 'Ignored (false) when closes_automatically.' }
+        template_items: { type: array, maxItems: 100, items: { type: string, maxLength: 255 }, description: 'For template_and_pending; blank names are left out.' }
+    RecurrenceInput:
+      type: object
+      description: |
+        The schedule (US-12.1). `once` runs at `starts_at` (in the future); `daily`
+        at `time_of_day`; `weekly` at `time_of_day` on `weekdays`; `monthly` at
+        `time_of_day` on `day_of_month` or on the last day; `custom_cron` on
+        `cron_expression`. Dates without an offset are read in the user's timezone.
+      required: [frequency]
+      properties:
+        frequency: { type: string, enum: [once, daily, weekly, monthly, custom_cron] }
+        time_of_day: { type: string, pattern: '^\d{2}:\d{2}$', examples: ['09:00'] }
+        weekdays:
+          type: array
+          items: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        day_of_month: { type: integer, minimum: 1, maximum: 31 }
+        is_last_day_of_month: { type: boolean }
+        cron_expression: { type: string, maxLength: 100 }
+        starts_at: { type: string, examples: ['2026-10-06T09:00'] }
+        ends_at: { type: [string, 'null'] }
+    Recurrence:
+      type: object
+      properties:
+        frequency: { type: string, enum: [once, daily, weekly, monthly, custom_cron] }
+        time_of_day: { type: [string, 'null'], description: 'Wall-clock time in `timezone`.' }
+        weekdays:
+          type: array
+          items: { type: string }
+        day_of_month: { type: [integer, 'null'] }
+        is_last_day_of_month: { type: boolean }
+        cron_expression: { type: [string, 'null'] }
+        timezone: { $ref: '#/components/schemas/Timezone' }
+        starts_at: { $ref: '#/components/schemas/DateTime' }
+        ends_at: { $ref: '#/components/schemas/NullableDateTime' }
+        next_run_at: { $ref: '#/components/schemas/NullableDateTime' }
+        is_paused: { type: boolean }
+
+    ReminderInput:
+      type: object
+      required: [title]
+      properties:
+        workspace: { type: string, description: 'The workspace (friendly id) it goes to, one of the reader''s with the module; left out, their default. On an update, moves it.' }
+        kind:
+          type: string
+          enum: [reminder, event]
+          description: Left out, a new item is a `reminder` and an edited one keeps its kind. An event needs `due_at` or `recurrence` and is never a task.
+        is_all_day:
+          type: boolean
+          description: Due at 09:00 on its date (`due_at` may be a date alone; a daily, weekly or monthly repeat runs at 09:00).
+        duration_minutes:
+          type: [integer, 'null']
+          minimum: 5
+          maximum: 10080
+          description: Required for an event that is not all day; ignored otherwise.
+        title: { type: string, maxLength: 255 }
+        note: { type: [string, 'null'], maxLength: 5000 }
+        due_at:
+          type: [string, 'null']
+          description: A single date and time in the future; ignored when `recurrence` is given.
+          examples: ['2026-10-06T09:00']
+        recurrence:
+          oneOf:
+            - $ref: '#/components/schemas/RecurrenceInput'
+            - type: 'null'
+        assigned_to:
+          type: [string, 'null']
+          description: >-
+            The friendly id of who is responsible (one of `meta.assignees`), who
+            receives `reminder_due`; null for nobody, when the creator receives it.
+            Left out, a new reminder is the creator's and an edited one keeps its
+            responsible.
+          examples: ['usr_8Kq2Zp0aLx9cVb3nM4tY7wQe']
+    Reminder:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        workspace: { $ref: '#/components/schemas/WorkspaceSummary' }
+        title: { type: string }
+        note: { type: [string, 'null'] }
+        kind: { type: string, enum: [reminder, event] }
+        is_all_day: { type: boolean }
+        duration_minutes: { type: [integer, 'null'] }
+        is_recurring: { type: boolean }
+        recurrence:
+          description: Null for an undated task; `once` for a dated one.
+          oneOf:
+            - $ref: '#/components/schemas/Recurrence'
+            - type: 'null'
+        open_occurrences:
+          type: array
+          description: Only after saving a reminder.
+          items:
+            type: object
+            properties:
+              friendly_id: { type: string }
+              due_at: { $ref: '#/components/schemas/NullableDateTime' }
+        created_by: { $ref: '#/components/schemas/UserSummary' }
+        assigned_to:
+          description: Who is responsible; null for nobody.
+          oneOf:
+            - $ref: '#/components/schemas/UserSummary'
+            - type: 'null'
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+        updated_at: { $ref: '#/components/schemas/NullableDateTime' }
+    ReminderOccurrence:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        due_at: { $ref: '#/components/schemas/NullableDateTime' }
+        is_completed: { type: boolean }
+        is_overdue: { type: boolean }
+        completed_at: { $ref: '#/components/schemas/NullableDateTime' }
+        completed_by:
+          oneOf:
+            - $ref: '#/components/schemas/UserSummary'
+            - type: 'null'
+        reminder: { $ref: '#/components/schemas/Reminder' }
+    CalendarEntry:
+      type: object
+      properties:
+        workspace:
+          description: The workspace of shared data, in the reader's color; null for personal sources (WhatsApp, Google).
+          oneOf:
+            - { $ref: '#/components/schemas/WorkspaceSummary' }
+            - { type: 'null' }
+        key: { type: string, description: 'Stable within the period: the occurrence''s friendly id, or `<owner>@<unix time>` for a run.' }
+        source: { type: string, enum: [reminders, events, invoices, whatsapp, shopping, google] }
+        title: { type: string }
+        subtitle: { type: [string, 'null'] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { $ref: '#/components/schemas/NullableDateTime' }
+        is_all_day: { type: boolean }
+        is_projected: { type: boolean }
+        is_completable: { type: boolean, description: 'A reminder''s occurrence: complete or reopen it by `occurrence_id`.' }
+        is_completed: { type: boolean }
+        is_overdue: { type: boolean }
+        reminder_id: { type: [string, 'null'], description: 'The reminder or event, to edit it.' }
+        occurrence_id: { type: [string, 'null'] }
+        url: { type: [string, 'null'], description: 'The web page of an invoice or WhatsApp item.' }
+    ReminderAgendaEntry:
+      type: object
+      properties:
+        due_at: { $ref: '#/components/schemas/NullableDateTime' }
+        is_projected: { type: boolean, description: 'A coming run of a repeating reminder, without an occurrence yet.' }
+        is_overdue: { type: boolean }
+        occurrence:
+          oneOf:
+            - $ref: '#/components/schemas/ReminderOccurrence'
+            - type: 'null'
+        reminder: { $ref: '#/components/schemas/Reminder' }
+
+    WhatsappAccount:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        nickname: { type: string }
+        phone_number: { type: [string, 'null'] }
+        status: { type: string, enum: [connecting, open, closed] }
+        is_open: { type: boolean }
+        connected_at: { $ref: '#/components/schemas/NullableDateTime' }
+        disconnected_at: { $ref: '#/components/schemas/NullableDateTime' }
+        last_synced_at: { $ref: '#/components/schemas/NullableDateTime' }
+        chat_settings:
+          type: object
+          description: The defaults of the number's chats.
+          properties:
+            sends_read_receipts: { type: boolean }
+            sends_typing: { type: boolean }
+            notifies_messages: { type: boolean, description: 'Pushes its chats'' messages to the apps.' }
+            syncs_phone_reads: { type: boolean, description: 'A chat read on the phone (or WhatsApp Web) is read in Jarvis too.' }
+    WhatsappTarget:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        name: { type: string, description: 'The synced name, otherwise the number.' }
+        type: { type: string, enum: [contact, group] }
+        phone_number: { type: [string, 'null'], description: 'E.164; null for a group.' }
+        is_synced: { type: boolean }
+    WhatsappChat:
+      type: object
+      properties:
+        friendly_id: { type: string, description: 'The contact''s target.' }
+        name: { type: string, description: 'The synced or pushed name, otherwise the number.' }
+        phone_number: { type: [string, 'null'], description: 'E.164; null for a chat known only by its `@lid`.' }
+        account:
+          type: object
+          properties:
+            friendly_id: { type: string }
+            nickname: { type: string }
+        last_received_message:
+          oneOf:
+            - $ref: '#/components/schemas/WhatsappChatMessage'
+            - type: 'null'
+        awaiting_reply: { type: boolean, description: 'Nothing was sent after the last received message.' }
+    WhatsappChatMessage:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        from_me: { type: boolean }
+        type: { type: string, description: 'The WhatsApp message type (`conversation`, `audioMessage`, `imageMessage`…).' }
+        body: { type: [string, 'null'], description: 'The text or caption; null for an audio or a media without caption.' }
+        sent_at: { type: string, format: date-time }
+    WhatsappConversation:
+      type: object
+      properties:
+        friendly_id: { type: string, description: 'The contact''s or group''s target.' }
+        name: { type: string, description: 'The user''s nickname for it, else the WhatsApp name, else the number.' }
+        nickname: { type: [string, 'null'] }
+        whatsapp_name: { type: [string, 'null'], description: 'The name WhatsApp gives.' }
+        is_group: { type: boolean }
+        phone_number: { type: [string, 'null'], description: 'E.164; null for a group or a chat known only by its `@lid`.' }
+        picture_url: { type: [string, 'null'], description: 'The WhatsApp picture; it expires, so show the initial when it fails.' }
+        account:
+          type: object
+          properties:
+            friendly_id: { type: string }
+            nickname: { type: string }
+        unread_count: { type: integer }
+        marked_unread: { type: boolean, description: 'Marked unread by hand.' }
+        pinned: { type: boolean }
+        archived: { type: boolean }
+        muted_until: { $ref: '#/components/schemas/NullableDateTime' }
+        blocked: { type: boolean }
+        ephemeral_seconds: { type: integer, description: 'The timer of disappearing messages; 0 when off.' }
+        description: { type: [string, 'null'], description: 'A group''s description.' }
+        priority: { type: [integer, 'null'], minimum: 1, maximum: 5, description: '1 is the highest.' }
+        priority_color: { type: [string, 'null'], description: 'The user''s color for the priority, `#rrggbb`.' }
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/WhatsappTag' }
+        last_message:
+          oneOf:
+            - $ref: '#/components/schemas/WhatsappConversationMessage'
+            - type: 'null'
+        last_message_at: { $ref: '#/components/schemas/NullableDateTime' }
+        settings:
+          type: object
+          description: Each null follows the number (`WhatsappAccount.chat_settings`); `effective` is what applies.
+          properties:
+            sends_read_receipts: { type: [boolean, 'null'] }
+            sends_typing: { type: [boolean, 'null'] }
+            notifies_messages: { type: [boolean, 'null'] }
+            effective:
+              type: object
+              properties:
+                sends_read_receipts: { type: boolean }
+                sends_typing: { type: boolean }
+                notifies_messages: { type: boolean }
+    WhatsappTag:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        name: { type: string, maxLength: 40 }
+        color: { type: string, description: '`#rrggbb`.' }
+        color_name: { type: string, description: 'A key of the palette (`GET /whatsapp/priority-colors`), what saving takes.' }
+    WhatsappChatItem:
+      type: object
+      description: A scheduled message or a reminder of a chat.
+      properties:
+        friendly_id: { type: string }
+        title: { type: string, description: 'A reminder''s.' }
+        body: { type: string, description: 'A scheduled message''s.' }
+        due_at: { $ref: '#/components/schemas/NullableDateTime' }
+        next_run_at: { $ref: '#/components/schemas/NullableDateTime' }
+        media:
+          type: [object, 'null']
+          description: The file a scheduled message sends.
+          properties:
+            mime: { type: [string, 'null'] }
+            name: { type: [string, 'null'] }
+            size: { type: [integer, 'null'] }
+    WhatsappConversationMessage:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        from_me: { type: boolean }
+        type: { type: string, description: 'The WhatsApp message type (`conversation`, `audioMessage`, `imageMessage`…).' }
+        sender: { type: [string, 'null'], description: 'Who sent a received group message: the name they showed, else their number.' }
+        body: { type: [string, 'null'], description: 'The text or caption, each mention as `@name`.' }
+        quoted:
+          type: [object, 'null']
+          description: The message it answers.
+          properties:
+            friendly_id: { type: [string, 'null'], description: 'Null when Jarvis does not keep it.' }
+            sender: { type: [string, 'null'] }
+            from_me: { type: boolean }
+            type: { type: [string, 'null'] }
+            body: { type: [string, 'null'] }
+        mentions:
+          type: array
+          items:
+            type: object
+            properties:
+              jid: { type: string }
+              name: { type: [string, 'null'] }
+        forwarded: { type: boolean }
+        edited: { type: boolean }
+        can_edit: { type: boolean }
+        can_delete_for_everyone: { type: boolean }
+        pinned: { type: boolean, description: 'Pinned for everyone in the chat now.' }
+        starred: { type: boolean }
+        sticker: { type: boolean }
+        location:
+          type: [object, 'null']
+          properties:
+            latitude: { type: number }
+            longitude: { type: number }
+            name: { type: string }
+            address: { type: string }
+            url: { type: string }
+            live: { type: boolean }
+        contacts:
+          type: [array, 'null']
+          items:
+            type: object
+            properties:
+              name: { type: [string, 'null'] }
+              numbers: { type: array, items: { type: string } }
+        poll:
+          type: [object, 'null']
+          properties:
+            name: { type: string }
+            selectable_count: { type: integer, description: '1: one answer; 0: any number.' }
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  votes: { type: integer }
+                  mine: { type: boolean }
+        receipt:
+          type: [string, 'null']
+          enum: [failed, pending, sent, delivered, read, played, null]
+          description: 'The ticks of what the number sent; null for a received message or an unknown receipt.'
+        revoked: { type: boolean, description: 'Deleted for everyone on WhatsApp; the text is kept.' }
+        media:
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties:
+                kind: { type: string, enum: [image, video, audio, document] }
+                mime: { type: [string, 'null'] }
+                name: { type: [string, 'null'] }
+                size: { type: [integer, 'null'], description: 'Bytes.' }
+                seconds: { type: [integer, 'null'], description: 'The length of an audio or video.' }
+                waveform:
+                  type: [array, 'null']
+                  description: '40 bar heights, 0 to 100, for an audio.'
+                  items: { type: integer }
+                thumbnail: { type: [string, 'null'], description: 'A tiny JPEG preview of an image or video, base64.' }
+                url: { type: [string, 'null'], description: 'Signed, temporary (6 hours) and without token (`GET /whatsapp/media/{message}`); null when the file is too big to fetch.' }
+        reactions:
+          type: array
+          description: By emoji, the most used first.
+          items:
+            type: object
+            properties:
+              emoji: { type: string }
+              count: { type: integer }
+              mine: { type: boolean }
+        sent_at: { $ref: '#/components/schemas/DateTime' }
+    WhatsappGroupMember:
+      type: object
+      properties:
+        jid: { type: string }
+        lid: { type: [string, 'null'] }
+        name: { type: string }
+        number: { type: [string, 'null'], description: 'E.164.' }
+        admin: { type: boolean }
+        me: { type: boolean, description: 'The number itself.' }
+    WhatsappGroup:
+      type: object
+      properties:
+        chat: { $ref: '#/components/schemas/WhatsappConversation' }
+        admins_only: { type: boolean }
+        info_admins_only: { type: boolean }
+        is_admin: { type: boolean }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/WhatsappGroupMember' }
+    WhatsappPriorityColors:
+      type: object
+      properties:
+        palette:
+          type: object
+          description: '`{name: "#rrggbb"}`.'
+          additionalProperties: { type: string }
+        colors:
+          type: object
+          description: '`{"1": name, …, "5": name}`.'
+          additionalProperties: { type: string }
+    WhatsappSendingInput:
+      type: object
+      required: [account, body]
+      properties:
+        account: { type: string, description: 'The friendly id of one of the user''s own `open` accounts.' }
+        targets:
+          type: array
+          maxItems: 50
+          description: Friendly ids of the account's contacts and groups.
+          items: { type: string }
+        numbers:
+          type: array
+          maxItems: 50
+          description: Numbers in E.164; spaces, dashes, dots and parentheses are dropped.
+          items: { type: string, examples: ['+5511999990000'] }
+        body:
+          type: string
+          maxLength: 4096
+          description: A `{% %}` template, such as `Hi {% recipient.name %}!`. At least one target or number is required. Optional with a `poll`.
+        poll:
+          oneOf:
+            - $ref: '#/components/schemas/WhatsappPollInput'
+            - type: 'null'
+          description: A poll sent to every target instead of the body, without a file or an `ai_prompt`. Errors come under `poll.*`. Null goes back to the body; left out on an update, the saved one stays.
+    WhatsappPollInput:
+      type: object
+      required: [question, options]
+      properties:
+        question: { type: string, maxLength: 255 }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 10
+          description: Distinct, ignoring case; blank ones are dropped.
+          items: { type: string, maxLength: 100 }
+        multiple: { type: boolean, default: false, description: 'Each person may pick more than one option.' }
+    WhatsappMessageInput:
+      allOf:
+        - $ref: '#/components/schemas/WhatsappSendingInput'
+        - type: object
+          required: [recurrence]
+          properties:
+            recurrence: { $ref: '#/components/schemas/RecurrenceInput' }
+            ai_prompt:
+              type: [string, 'null']
+              maxLength: 2000
+              description: What the AI writes at each run, reading the chat, instead of a body (then optional) and without a file. Needs an AI set up for WhatsApp replies. Null or blank goes back to the body; left out on an update, the saved one stays.
+    WhatsappMessage:
+      type: object
+      properties:
+        friendly_id: { type: string }
+        account:
+          type: object
+          properties:
+            friendly_id: { type: string }
+            nickname: { type: string }
+        targets:
+          type: array
+          items: { $ref: '#/components/schemas/WhatsappTarget' }
+        body: { type: string }
+        state: { type: string, enum: [active, paused, cancelled, finished] }
+        recurrence:
+          oneOf:
+            - $ref: '#/components/schemas/Recurrence'
+            - type: 'null'
+        ai_prompt: { type: [string, 'null'], description: 'What the AI writes at each run; the body is then empty.' }
+        poll:
+          oneOf:
+            - $ref: '#/components/schemas/WhatsappPollInput'
+            - type: 'null'
+          description: The poll it sends instead of a text; the body is then its question.
+        cancelled_at: { $ref: '#/components/schemas/NullableDateTime' }
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+        updated_at: { $ref: '#/components/schemas/NullableDateTime' }
+    WhatsappDelivery:
+      type: object
+      properties:
+        account:
+          type: object
+          properties:
+            friendly_id: { type: string }
+            nickname: { type: string }
+        target: { $ref: '#/components/schemas/WhatsappTarget' }
+        message_id: { type: [string, 'null'], description: 'The scheduled message it came from, if any.' }
+        body: { type: string, description: 'The text as it went out.' }
+        source: { type: string, enum: [scheduled, manual, notification, voice, chat] }
+        status: { type: string, enum: [pending, sent, failed] }
+        error_message: { type: [string, 'null'] }
+        scheduled_for: { $ref: '#/components/schemas/NullableDateTime' }
+        sent_at: { $ref: '#/components/schemas/NullableDateTime' }
+        created_at: { $ref: '#/components/schemas/NullableDateTime' }
+    ChatCapabilities:
+      type: object
+      description: What a channel supports; the app shows only what is on.
+      properties:
+        send: { type: boolean }
+        files: { type: boolean }
+        threads: { type: boolean }
+        reactions: { type: boolean }
+        reaction_emojis: { type: [array, 'null'], items: { type: string }, description: 'The emojis the channel takes; null when any goes.' }
+        edit_messages: { type: boolean }
+        delete_messages: { type: boolean }
+        mentions: { type: boolean, description: '`@handle` in a text mentions a participant.' }
+        mark_read: { type: boolean, description: 'The channel is told when the user reads the conversation.' }
+        read_receipts: { type: boolean }
+        typing: { type: boolean }
+        presence: { type: boolean }
+        history: { type: boolean, description: 'Older messages can be fetched from the channel.' }
+        search: { type: boolean }
+        external_link: { type: boolean, description: 'Conversations and messages have a link on the channel.' }
+        formatting: { type: string, enum: [plain, mrkdwn, whatsapp], description: 'How a text sent is formatted.' }
+        polls: { type: boolean, description: 'Polls can be sent and scheduled (WhatsApp).' }
+    ChatAccount:
+      type: object
+      description: An account the user connected on a channel (a Slack workspace).
+      properties:
+        id: { type: string, examples: ['slk_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+        provider: { type: string, examples: [slack] }
+        label: { type: string, description: 'The workspace name.' }
+        detail: { type: [string, 'null'], description: 'Who the user is there.' }
+        is_usable: { type: boolean, description: 'False once the channel refused the token; the account must be connected again on the web.' }
+        error: { type: [string, 'null'] }
+        connected_at: { $ref: '#/components/schemas/NullableDateTime' }
+        synced_at: { $ref: '#/components/schemas/NullableDateTime' }
+        url: { type: [string, 'null'], description: 'The account on the channel.' }
+        conversation_count: { type: integer }
+    ChatProvider:
+      type: object
+      properties:
+        slug: { type: string, examples: [slack] }
+        name: { type: string, examples: [Slack] }
+        capabilities: { $ref: '#/components/schemas/ChatCapabilities' }
+        accounts:
+          type: array
+          items: { $ref: '#/components/schemas/ChatAccount' }
+    ChatTag:
+      type: object
+      properties:
+        friendly_id: { type: string, examples: ['ctag_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+        name: { type: string }
+        color: { type: string, description: '`#rrggbb`.' }
+        color_name: { type: string, description: 'The key of the palette.' }
+    ChatContact:
+      type: object
+      description: The person behind conversations on several channels.
+      properties:
+        friendly_id: { type: string, examples: ['cct_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+        name: { type: string }
+        notes: { type: [string, 'null'] }
+        conversation_ids: { type: array, items: { type: string } }
+    ChatConversation:
+      type: object
+      properties:
+        friendly_id: { type: string, examples: ['cnv_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+        provider: { type: string, examples: [slack], description: 'The channel; the app shows its icon.' }
+        kind: { type: string, enum: [direct, group, channel] }
+        name: { type: [string, 'null'], description: 'As the channel names it.' }
+        nickname: { type: [string, 'null'] }
+        display_name: { type: string, description: 'The nickname, else the name.' }
+        picture_url: { type: [string, 'null'] }
+        pinned_at: { $ref: '#/components/schemas/NullableDateTime' }
+        priority: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        priority_color: { type: [string, 'null'], description: '`#rrggbb` of the priority, from the user''s palette.' }
+        archived_at: { $ref: '#/components/schemas/NullableDateTime' }
+        muted_until: { $ref: '#/components/schemas/NullableDateTime' }
+        unread_count: { type: integer }
+        marked_unread: { type: boolean }
+        last_message_at: { $ref: '#/components/schemas/NullableDateTime' }
+        last_message:
+          type: [object, 'null']
+          properties:
+            text: { type: [string, 'null'], description: 'The text, or what the message holds.' }
+            from_me: { type: boolean }
+            sender: { type: [string, 'null'], description: 'Who sent it, when not the user.' }
+            kind: { type: string, enum: [text, file, system, deleted] }
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/ChatTag' }
+        contact:
+          oneOf:
+            - $ref: '#/components/schemas/ChatContact'
+            - type: 'null'
+        capabilities:
+          description: Only on `GET /chats/conversations/{conversation}`; what the channel supports on this conversation.
+          $ref: '#/components/schemas/ChatCapabilities'
+        external_url: { type: [string, 'null'], description: 'Only on `GET /chats/conversations/{conversation}`: the conversation on the channel.' }
+    ChatScheduledMessage:
+      type: object
+      properties:
+        friendly_id: { type: string, examples: ['csm_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+        conversation_id: { type: string }
+        body: { type: [string, 'null'], description: 'Null when the AI writes it.' }
+        ai_prompt: { type: [string, 'null'] }
+        poll:
+          oneOf:
+            - $ref: '#/components/schemas/WhatsappPollInput'
+            - type: 'null'
+          description: The poll it sends; the body is then its question.
+        thread_id: { type: [string, 'null'] }
+        frequency: { type: string, enum: [once, daily, weekly, monthly, custom_cron] }
+        send_at: { $ref: '#/components/schemas/NullableDateTime', description: 'The next sending; null once a repeating one is over.' }
+        sent_at: { $ref: '#/components/schemas/NullableDateTime' }
+        cancelled_at: { $ref: '#/components/schemas/NullableDateTime' }
+        failed_at: { $ref: '#/components/schemas/NullableDateTime' }
+        error: { type: [string, 'null'] }
+    ChatFile:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        mime: { type: [string, 'null'] }
+        size: { type: [integer, 'null'], description: Bytes. }
+        kind: { type: string, enum: [image, video, audio, document] }
+        url: { type: [string, 'null'], description: 'A signed link good for a day (`GET /chats/files/…`); null when the file is too large to pass through Jarvis.' }
+        thumbnail_url: { type: [string, 'null'] }
+    ChatReaction:
+      type: object
+      properties:
+        emoji: { type: string }
+        count: { type: integer }
+        mine: { type: boolean }
+        names: { type: array, items: { type: string }, description: Who reacted. }
+    ChatMessage:
+      type: object
+      description: A message of any channel, as the chat screen shows it.
+      properties:
+        id: { type: string, examples: ['slm_8Kq2Zp0aLx9cVb3nM4tY7wQe'] }
+        conversation_id: { type: string }
+        from_me: { type: boolean }
+        sender:
+          type: [object, 'null']
+          properties:
+            id: { type: [string, 'null'] }
+            name: { type: [string, 'null'] }
+            picture_url: { type: [string, 'null'] }
+        kind: { type: string, enum: [text, file, system], description: '`system`: a notice of the channel (someone joined…).' }
+        text: { type: [string, 'null'], description: 'Plain text, mentions as names.' }
+        html: { type: string, description: 'The text with its formatting (bold, links, mentions, code) as safe HTML.' }
+        files:
+          type: array
+          items: { $ref: '#/components/schemas/ChatFile' }
+        thread_id: { type: [string, 'null'], description: 'The id of the message whose thread this one is in, or its own id on a message that starts a thread.' }
+        reply_count: { type: integer }
+        reactions:
+          type: array
+          items: { $ref: '#/components/schemas/ChatReaction' }
+        sent_at: { $ref: '#/components/schemas/DateTime' }
+        edited_at: { $ref: '#/components/schemas/NullableDateTime' }
+        deleted_at: { $ref: '#/components/schemas/NullableDateTime' }
+        can_edit: { type: boolean }
+        can_delete: { type: boolean }
+        external_url: { type: [string, 'null'], description: 'The message on the channel.' }
+    VoiceActionInput:
+      type: object
+      required: [action, parameters]
+      description: |
+        Names are as spoken (`dessa semana`) or the friendly id of a picked option.
+        - `shopping.add_item`: `item`, optional `quantity`, `list` (left out: the only active list);
+        - `shopping.check_item`: `item`, optional `list`;
+        - `reminders.create`: `title`, optional `due_at` (local `YYYY-MM-DDTHH:MM`, read in the user's timezone), `note`;
+        - `reminders.complete`: `reminder`;
+        - `whatsapp.send`: `target`, `body`, optional `account` (a nickname) — always answered `needs_confirmation`.
+      properties:
+        action: { type: string, enum: [shopping.add_item, shopping.check_item, reminders.create, reminders.complete, whatsapp.send] }
+        parameters:
+          type: object
+          properties:
+            item: { type: string, maxLength: 255 }
+            quantity: { type: [string, 'null'], maxLength: 255 }
+            list: { type: [string, 'null'], maxLength: 255 }
+            title: { type: string, maxLength: 255 }
+            due_at: { type: [string, 'null'], example: '2026-10-06T09:00' }
+            note: { type: [string, 'null'], maxLength: 5000 }
+            reminder: { type: string, maxLength: 255 }
+            target: { type: string, maxLength: 255 }
+            body: { type: string, maxLength: 4096 }
+            account: { type: [string, 'null'], maxLength: 255 }
+    VoiceCommandResult:
+      type: object
+      required: [action, status, message, parameters, clarification, confirmation]
+      properties:
+        action:
+          type: [string, 'null']
+          enum: [shopping.add_item, shopping.check_item, reminders.create, reminders.complete, whatsapp.send, null]
+          description: Null when the command was not understood.
+        status:
+          type: string
+          enum: [done, needs_confirmation, needs_clarification, forbidden, failed]
+          description: |
+            - `done`: the action ran;
+            - `needs_confirmation`: nothing ran; confirm with `confirmation.token` (every `whatsapp.send`);
+            - `needs_clarification`: more than one candidate; send the action again
+              (`POST /voice/actions`) with `parameters` and the picked option's `id` as `clarification.parameter`;
+            - `forbidden`: the action's module is switched off for the user;
+            - `failed`: not understood, nothing found, or refused by the action's validation.
+        message: { type: string, description: "Translated to the user's language, for the screen and TTS." }
+        parameters:
+          type: [object, 'null']
+          description: The action's parameters as understood (see `VoiceActionInput`).
+          additionalProperties: { type: [string, 'null'] }
+        clarification:
+          type: [object, 'null']
+          properties:
+            parameter: { type: string, enum: [list, item, reminder, target] }
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, description: 'A friendly id.' }
+                  label: { type: string }
+        confirmation:
+          type: [object, 'null']
+          properties:
+            token: { type: string }
+            expires_at: { $ref: '#/components/schemas/DateTime' }
+            summary:
+              type: object
+              properties:
+                account: { type: string }
+                target: { type: string }
+                target_type: { type: string, enum: [contact, group] }
+                body: { type: string }

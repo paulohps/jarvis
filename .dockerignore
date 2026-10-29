@@ -1,0 +1,45 @@
+.git
+.github
+.gitignore
+node_modules
+vendor
+public/build
+public/hot
+public/storage
+
+# Segredos e configs locais — NUNCA dentro da imagem.
+.env
+.env.*
+auth.json
+
+# Ferramentas de agente/IDE e specs — fora da imagem.
+.agents
+.claude
+.codex
+.idea
+.zed
+.phases
+.spec
+.mcp.json
+opencode.json
+boost.json
+
+# Estado runtime (vem de volume/efemero, nao da imagem).
+storage/app/public/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
+storage/pail
+
+# Caches do bootstrap (packages/services/config). Sao gerados no ambiente; se
+# baked do dev citam pacotes dev (ex.: laravel/boost) ausentes em prod → erro.
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+
+# Dev / Sail / testes — fora da imagem de producao.
+tests
+phpunit.xml
+phpstan.neon
+compose.yaml
+*.md

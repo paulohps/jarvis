@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window behind Compose; the screens draw their own iOS 27 backgrounds. -->
+    <style name="Theme.Jarvis" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/grouped_background</item>
+        <!-- The system splash: the white mark on the brand blue, drawn again by `SplashScreen` until the session loads. -->
+        <item name="android:windowSplashScreenBackground">@color/brand</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    </style>
+</resources>

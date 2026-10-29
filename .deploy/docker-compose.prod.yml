@@ -1,0 +1,179 @@
+# Deploy multi-servico no Dokploy (tipo: Compose).
+# Compose Path no Dokploy = .deploy/docker-compose.prod.yml
+#
+# Servicos EXTERNOS (criados separados no Dokploy, alcancados via dokploy-network):
+#   - PostgreSQL -> DB_HOST = nome interno do servico no Dokploy
+#   - Redis      -> REDIS_HOST = nome interno do servico no Dokploy
+#   A Evolution API tambem usa esse PostgreSQL (schema `evolution_api`) e esse
+#   Redis (db 6), mesmo layout do compose.yaml do Sail.
+#
+# Servicos DESTE compose:
+#   - web           FrankenPHP :8080 (migrate + lookups + provision + caches no boot)
+#   - horizon       filas default, notifications, invoices e whatsapp
+#   - reverb        WebSocket :8080 (TLS terminado no Traefik)
+#   - scheduler     schedule:work (dispara schedule:run a cada minuto)
+#   - gotenberg     PDF (imagem oficial, so rede interna)
+#   - evolution-api WhatsApp (imagem oficial, volume persistente das instancias)
+#
+# Dominios no Dokploy (aba Domains, HTTPS + Let's Encrypt):
+#   - jarvis.example.com    -> servico `web`,    Container Port 8080
+#   - ws-jarvis.example.com -> servico `reverb`, Container Port 8080 (WebSocket wss://)
+#   - evolution-api fica SEM dominio publico (o Laravel fala com ela pela rede
+#     interna). So exponha se precisar parear o WhatsApp pelo manager dela.
+#
+# Envs: vem da aba Environment do Dokploy (gravadas em .env ao lado deste
+# arquivo, lido via env_file). Obrigatorias em producao:
+#   APP_NAME, APP_ENV=production, APP_DEBUG=false, APP_URL=https://jarvis.example.com
+#   APP_KEY                       (php artisan key:generate --show)
+#   DB_CONNECTION=pgsql, DB_HOST, DB_PORT=5432, DB_DATABASE, DB_USERNAME, DB_PASSWORD
+#   REDIS_CLIENT=phpredis, REDIS_HOST, REDIS_PORT=6379, REDIS_PASSWORD
+#   QUEUE_CONNECTION=redis, CACHE_STORE, SESSION_DRIVER, BROADCAST_CONNECTION=reverb
+#   REVERB_APP_ID, REVERB_APP_KEY, REVERB_APP_SECRET
+#   REVERB_HOST=ws-jarvis.example.com, REVERB_PORT=443, REVERB_SCHEME=https
+#     (como o Laravel publica eventos no Reverb: pela URL publica, via Traefik)
+#   REVERB_SERVER_HOST=0.0.0.0, REVERB_SERVER_PORT=8080 (onde o Reverb escuta)
+#   VITE_REVERB_HOST=ws-jarvis.example.com, VITE_REVERB_PORT=443, VITE_REVERB_SCHEME=https
+#     (build args: baked no JS na hora do build; mudou -> rebuild)
+#   MAIL_MAILER, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD,
+#   MAIL_SCHEME, MAIL_FROM_ADDRESS, MAIL_FROM_NAME
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI,
+#   GOOGLE_IOS_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID
+#   EVOLUTION_API_URL=http://evolution-api:8080, EVOLUTION_API_KEY,
+#   EVOLUTION_WEBHOOK_SECRET, EVOLUTION_SERVER_URL=https://evolution.seudominio
+#     (ou a URL interna se ela ficar sem dominio)
+#   LARAVEL_PDF_DRIVER=gotenberg, GOTENBERG_URL=http://gotenberg:3000
+#   LOG_CHANNEL=stderr (logs no painel do Dokploy)
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: .deploy/Dockerfile
+    args:
+      VITE_APP_NAME: ${APP_NAME}
+      VITE_REVERB_APP_KEY: ${REVERB_APP_KEY}
+      VITE_REVERB_HOST: ${VITE_REVERB_HOST}        # ws-jarvis.example.com
+      VITE_REVERB_PORT: ${VITE_REVERB_PORT:-443}
+      VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-https}
+  image: jarvis:latest
+  restart: unless-stopped
+  env_file:
+    - .env
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - dokploy-network
+
+services:
+  web:
+    <<: *app
+    environment:
+      RUN_MIGRATIONS: "true"
+    volumes:
+      - storage_public:/app/storage/app/public
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/up"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    # Dokploy: dominio principal -> servico `web`, Container Port 8080.
+
+  horizon:
+    <<: *app
+    command: ["php", "artisan", "horizon"]
+    stop_grace_period: 60s          # deixa Horizon terminar jobs antes de morrer
+    depends_on:
+      web:
+        condition: service_healthy  # so sobe apos migrate (web fica healthy depois do migrate)
+    volumes:
+      - storage_public:/app/storage/app/public
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  reverb:
+    <<: *app
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    expose:
+      - "8080"
+    depends_on:
+      web:
+        condition: service_healthy
+    # Sobrescreve o HEALTHCHECK herdado da imagem FrankenPHP (curl :2019/metrics
+    # do Caddy admin), que aqui NÃO existe — o reverb roda o servidor do Reverb,
+    # não o Caddy. Container ficaria "unhealthy" e o Traefik tiraria ele da rota
+    # (→ 404). Aqui checa a porta do próprio Reverb (qualquer resposta HTTP = vivo).
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Dokploy: subdominio ws-jarvis.example.com -> servico `reverb`, Container
+    # Port 8080, HTTPS ligado. O Traefik termina o TLS e faz o upgrade do
+    # WebSocket; o browser conecta em wss://ws-jarvis.example.com:443.
+
+  scheduler:
+    <<: *app
+    # schedule:work roda schedule:run a cada minuto, sem cron no container.
+    command: ["php", "artisan", "schedule:work", "--verbose"]
+    depends_on:
+      web:
+        condition: service_healthy
+    # Não é servidor; desliga o healthcheck herdado (Caddy :2019) que o marcava
+    # "unhealthy" à toa. O restart: unless-stopped cuida de crash.
+    healthcheck:
+      disable: true
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - dokploy-network
+    # Sem dominio: so o Laravel chama, via GOTENBERG_URL=http://gotenberg:3000.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    restart: unless-stopped
+    environment:
+      SERVER_URL: ${EVOLUTION_SERVER_URL:-http://evolution-api:8080}
+      SERVER_PORT: 8080
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-5432}/${DB_DATABASE}?schema=evolution_api
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_api
+      # Keep the messages and the history handed over on linking, so the
+      # reply keyboard's "Sync conversations" can import them again.
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_DATA_HISTORIC: "true"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://${REDIS_USERNAME:-default}:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT:-6379}/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - dokploy-network
+    # Sem dominio por padrao (rede interna, EVOLUTION_API_URL=http://evolution-api:8080).
+
+volumes:
+  storage_public:
+  evolution_instances:
+
+networks:
+  dokploy-network:
+    external: true

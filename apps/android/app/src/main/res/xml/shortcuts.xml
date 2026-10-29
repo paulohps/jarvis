@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The App Actions of Jarvis (US-10.1, US-10.3). Each capability opens
+    MainActivity with its own action; the app maps the extras to a voice
+    action (`voice/ShortcutMapping.kt`) and runs it with POST /voice/actions.
+    A WhatsApp message is never sent from here: the server answers
+    needs_confirmation and the app waits for the tap on Send.
+-->
+<shortcuts
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Built-in intent: "add milk to my weekly list in Jarvis". -->
+    <capability android:name="actions.intent.UPDATE_ITEM_LIST">
+        <intent
+            android:action="app.jarvis.android.action.ADD_SHOPPING_ITEM"
+            android:targetPackage="jarvis.campeonato.app"
+            android:targetClass="app.jarvis.android.MainActivity">
+            <parameter
+                android:name="itemList.itemListElement.name"
+                android:key="item"
+                android:required="true" />
+            <parameter
+                android:name="itemList.name"
+                android:key="list" />
+        </intent>
+    </capability>
+
+    <!-- Custom intent (en-US only): Android has no built-in intent for reminders. -->
+    <capability
+        android:name="custom.actions.intent.CREATE_REMINDER"
+        app:queryPatterns="@array/create_reminder_queries">
+        <intent
+            android:action="app.jarvis.android.action.CREATE_REMINDER"
+            android:targetPackage="jarvis.campeonato.app"
+            android:targetClass="app.jarvis.android.MainActivity">
+            <parameter
+                android:name="title"
+                android:key="title"
+                android:mimeType="https://schema.org/Text"
+                android:required="true" />
+            <parameter
+                android:name="date"
+                android:key="date"
+                android:mimeType="https://schema.org/Date" />
+            <parameter
+                android:name="time"
+                android:key="time"
+                android:mimeType="https://schema.org/Time" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.COMPLETE_REMINDER"
+        app:queryPatterns="@array/complete_reminder_queries">
+        <intent
+            android:action="app.jarvis.android.action.COMPLETE_REMINDER"
+            android:targetPackage="jarvis.campeonato.app"
+            android:targetClass="app.jarvis.android.MainActivity">
+            <parameter
+                android:name="reminder"
+                android:key="reminder"
+                android:mimeType="https://schema.org/Text"
+                android:required="true" />
+        </intent>
+    </capability>
+
+    <!-- Built-in intent: "send a message to Ana with Jarvis". Confirmed in the app before it is sent. -->
+    <capability android:name="actions.intent.CREATE_MESSAGE">
+        <intent
+            android:action="app.jarvis.android.action.SEND_WHATSAPP_MESSAGE"
+            android:targetPackage="jarvis.campeonato.app"
+            android:targetClass="app.jarvis.android.MainActivity">
+            <parameter
+                android:name="message.recipient.name"
+                android:key="target"
+                android:required="true" />
+            <parameter
+                android:name="message.text"
+                android:key="body" />
+        </intent>
+    </capability>
+</shortcuts>

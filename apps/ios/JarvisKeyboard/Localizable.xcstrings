@@ -1,0 +1,176 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Another one": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gerar outra"
+          }
+        }
+      }
+    },
+    "Back": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar"
+          }
+        }
+      }
+    },
+    "Insert": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserir"
+          }
+        }
+      }
+    },
+    "Next keyboard": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próximo teclado"
+          }
+        }
+      }
+    },
+    "No messages received yet.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma mensagem recebida ainda."
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atualizar"
+          }
+        }
+      }
+    },
+    "Reply with Jarvis": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder com o Jarvis"
+          }
+        }
+      }
+    },
+    "Sign in to the Jarvis app first.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre no app Jarvis primeiro."
+          }
+        }
+      }
+    },
+    "Something went wrong. Try again.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algo deu errado. Tente de novo."
+          }
+        }
+      }
+    },
+    "Sticker": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Figurinha"
+          }
+        }
+      }
+    },
+    "Tap a message to draft the answer. What you typed in the field is used as the instruction.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque numa mensagem para gerar a resposta. O que você digitou no campo vira a instrução."
+          }
+        }
+      }
+    },
+    "Turn on Full Access in Settings › General › Keyboard › Keyboards › Jarvis so the keyboard can reach Jarvis.": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ative o Acesso Total em Ajustes › Geral › Teclado › Teclados › Jarvis para o teclado falar com o Jarvis."
+          }
+        }
+      }
+    },
+    "Writing…": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrevendo…"
+          }
+        }
+      }
+    },
+    "🎤 Audio": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "🎤 Áudio"
+          }
+        }
+      }
+    },
+    "🎥 Video": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "🎥 Vídeo"
+          }
+        }
+      }
+    },
+    "📎 Attachment": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "📎 Anexo"
+          }
+        }
+      }
+    },
+    "📷 Photo": {
+      "localizations": {
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "📷 Foto"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

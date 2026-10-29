@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app icon as a rounded tile (resources/brand/favicon.svg): the sign-in header. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="84dp"
+    android:height="84dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path android:pathData="M22,0 L78,0 A22,22 0 0 1 100,22 L100,78 A22,22 0 0 1 78,100 L22,100 A22,22 0 0 1 0,78 L0,22 A22,22 0 0 1 22,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="100"
+                android:endY="100">
+                <item android:offset="0" android:color="#FF3D8BFF" />
+                <item android:offset="0.55" android:color="#FF0A5BE0" />
+                <item android:offset="1" android:color="#FF1C2C9E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <group
+        android:translateX="-0.5"
+        android:translateY="-1">
+        <path
+            android:pathData="M53,34 L53,60 A14,14 0 0 1 25,60"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="12"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M73,16 C74.1,24.2 77.8,27.9 86,29 C77.8,30.1 74.1,33.8 73,42 C71.9,33.8 68.2,30.1 60,29 C68.2,27.9 71.9,24.2 73,16 Z" />
+    </group>
+</vector>

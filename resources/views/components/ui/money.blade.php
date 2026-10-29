@@ -1,0 +1,1 @@
+<span {{ $attributes->class('whitespace-nowrap tabular-nums') }} @if ($code) data-currency="{{ $code }}" @endif>@if ($code)<abbr title="{{ $currencyLabel() }}" class="no-underline">{{ $code }}</abbr> @endif{{ $formattedAmount() }}</span>

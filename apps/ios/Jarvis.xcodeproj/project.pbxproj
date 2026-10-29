@@ -1,0 +1,571 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		JA0000000000000000000101 /* Networking in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000201 /* Networking */; };
+		JA0000000000000000000102 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000202 /* Auth */; };
+		JA0000000000000000000103 /* Localization in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000203 /* Localization */; };
+		JA0000000000000000000104 /* Navigation in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000204 /* Navigation */; };
+		JA0000000000000000000105 /* Push in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000205 /* Push */; };
+		JA0000000000000000000106 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000206 /* Realtime */; };
+		JA0000000000000000000107 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000207 /* FirebaseMessaging */; };
+		JA0000000000000000000108 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000208 /* GoogleSignIn */; };
+		JA0000000000000000000109 /* Offline in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000209 /* Offline */; };
+		JA0000000000000000000110 /* Voice in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000210 /* Voice */; };
+		JA0000000000000000000111 /* Networking in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000211 /* Networking */; };
+		JA0000000000000000000112 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = JA0000000000000000000212 /* Auth */; };
+		JA0000000000000000000113 /* JarvisKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = JA0000000000000000000307 /* JarvisKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		JA0000000000000000001101 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = JA0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = JA0000000000000000000702;
+			remoteInfo = JarvisKeyboard;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		JA0000000000000000000507 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				JA0000000000000000000113 /* JarvisKeyboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		JA0000000000000000000301 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		JA0000000000000000000302 /* JarvisKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = JarvisKit; sourceTree = "<group>"; };
+		JA0000000000000000000303 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		JA0000000000000000000304 /* Jarvis.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Jarvis.entitlements; sourceTree = "<group>"; };
+		JA0000000000000000000305 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		JA0000000000000000000306 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text; path = Local.xcconfig.example; sourceTree = "<group>"; };
+		JA0000000000000000000307 /* JarvisKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JarvisKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		JA0000000000000000000308 /* JarvisKeyboard-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "JarvisKeyboard-Info.plist"; sourceTree = "<group>"; };
+		JA0000000000000000000309 /* JarvisKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = JarvisKeyboard.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		JA0000000000000000000401 /* Jarvis */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Jarvis;
+			sourceTree = "<group>";
+		};
+		JA0000000000000000000402 /* JarvisKeyboard */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JarvisKeyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		JA0000000000000000000501 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				JA0000000000000000000101 /* Networking in Frameworks */,
+				JA0000000000000000000102 /* Auth in Frameworks */,
+				JA0000000000000000000103 /* Localization in Frameworks */,
+				JA0000000000000000000104 /* Navigation in Frameworks */,
+				JA0000000000000000000105 /* Push in Frameworks */,
+				JA0000000000000000000106 /* Realtime in Frameworks */,
+				JA0000000000000000000107 /* FirebaseMessaging in Frameworks */,
+				JA0000000000000000000108 /* GoogleSignIn in Frameworks */,
+				JA0000000000000000000109 /* Offline in Frameworks */,
+				JA0000000000000000000110 /* Voice in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		JA0000000000000000000504 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				JA0000000000000000000111 /* Networking in Frameworks */,
+				JA0000000000000000000112 /* Auth in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		JA0000000000000000000601 = {
+			isa = PBXGroup;
+			children = (
+				JA0000000000000000000401 /* Jarvis */,
+				JA0000000000000000000402 /* JarvisKeyboard */,
+				JA0000000000000000000302 /* JarvisKit */,
+				JA0000000000000000000602 /* Support */,
+				JA0000000000000000000603 /* Config */,
+				JA0000000000000000000604 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		JA0000000000000000000602 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				JA0000000000000000000303 /* Info.plist */,
+				JA0000000000000000000304 /* Jarvis.entitlements */,
+				JA0000000000000000000308 /* JarvisKeyboard-Info.plist */,
+				JA0000000000000000000309 /* JarvisKeyboard.entitlements */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		JA0000000000000000000603 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				JA0000000000000000000305 /* Base.xcconfig */,
+				JA0000000000000000000306 /* Local.xcconfig.example */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		JA0000000000000000000604 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				JA0000000000000000000301 /* Jarvis.app */,
+				JA0000000000000000000307 /* JarvisKeyboard.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		JA0000000000000000000701 /* Jarvis */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = JA0000000000000000000902 /* Build configuration list for PBXNativeTarget "Jarvis" */;
+			buildPhases = (
+				JA0000000000000000000502 /* Sources */,
+				JA0000000000000000000501 /* Frameworks */,
+				JA0000000000000000000503 /* Resources */,
+				JA0000000000000000000507 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				JA0000000000000000001102 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				JA0000000000000000000401 /* Jarvis */,
+			);
+			name = Jarvis;
+			packageProductDependencies = (
+				JA0000000000000000000201 /* Networking */,
+				JA0000000000000000000202 /* Auth */,
+				JA0000000000000000000203 /* Localization */,
+				JA0000000000000000000204 /* Navigation */,
+				JA0000000000000000000205 /* Push */,
+				JA0000000000000000000206 /* Realtime */,
+				JA0000000000000000000207 /* FirebaseMessaging */,
+				JA0000000000000000000208 /* GoogleSignIn */,
+				JA0000000000000000000209 /* Offline */,
+				JA0000000000000000000210 /* Voice */,
+			);
+			productName = Jarvis;
+			productReference = JA0000000000000000000301 /* Jarvis.app */;
+			productType = "com.apple.product-type.application";
+		};
+		JA0000000000000000000702 /* JarvisKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = JA0000000000000000000903 /* Build configuration list for PBXNativeTarget "JarvisKeyboard" */;
+			buildPhases = (
+				JA0000000000000000000505 /* Sources */,
+				JA0000000000000000000504 /* Frameworks */,
+				JA0000000000000000000506 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				JA0000000000000000000402 /* JarvisKeyboard */,
+			);
+			name = JarvisKeyboard;
+			packageProductDependencies = (
+				JA0000000000000000000211 /* Networking */,
+				JA0000000000000000000212 /* Auth */,
+			);
+			productName = JarvisKeyboard;
+			productReference = JA0000000000000000000307 /* JarvisKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		JA0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					JA0000000000000000000701 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					JA0000000000000000000702 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = JA0000000000000000000901 /* Build configuration list for PBXProject "Jarvis" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				"pt-BR",
+			);
+			mainGroup = JA0000000000000000000601;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				JA0000000000000000001001 /* XCLocalSwiftPackageReference "JarvisKit" */,
+				JA0000000000000000001002 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				JA0000000000000000001003 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = JA0000000000000000000604 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				JA0000000000000000000701 /* Jarvis */,
+				JA0000000000000000000702 /* JarvisKeyboard */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		JA0000000000000000000503 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		JA0000000000000000000506 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		JA0000000000000000000502 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		JA0000000000000000000505 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		JA0000000000000000001102 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = JA0000000000000000000702 /* JarvisKeyboard */;
+			targetProxy = JA0000000000000000001101 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		JA0000000000000000000801 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = JA0000000000000000000305 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		JA0000000000000000000802 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = JA0000000000000000000305 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		JA0000000000000000000803 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "$(JARVIS_ENTITLEMENTS)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "$(JARVIS_DEVELOPMENT_TEAM)";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Jarvis;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(JARVIS_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		JA0000000000000000000804 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "$(JARVIS_ENTITLEMENTS)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "$(JARVIS_DEVELOPMENT_TEAM)";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Jarvis;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(JARVIS_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		JA0000000000000000000805 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Support/JarvisKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "$(JARVIS_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Support/JarvisKeyboard-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Jarvis;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(JARVIS_BUNDLE_IDENTIFIER).keyboard";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		JA0000000000000000000806 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Support/JarvisKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "$(JARVIS_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Support/JarvisKeyboard-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Jarvis;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(JARVIS_BUNDLE_IDENTIFIER).keyboard";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		JA0000000000000000000901 /* Build configuration list for PBXProject "Jarvis" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				JA0000000000000000000801 /* Debug */,
+				JA0000000000000000000802 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		JA0000000000000000000902 /* Build configuration list for PBXNativeTarget "Jarvis" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				JA0000000000000000000803 /* Debug */,
+				JA0000000000000000000804 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		JA0000000000000000000903 /* Build configuration list for PBXNativeTarget "JarvisKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				JA0000000000000000000805 /* Debug */,
+				JA0000000000000000000806 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		JA0000000000000000001001 /* XCLocalSwiftPackageReference "JarvisKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = JarvisKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		JA0000000000000000001002 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
+		JA0000000000000000001003 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		JA0000000000000000000201 /* Networking */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Networking;
+		};
+		JA0000000000000000000202 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Auth;
+		};
+		JA0000000000000000000203 /* Localization */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Localization;
+		};
+		JA0000000000000000000204 /* Navigation */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Navigation;
+		};
+		JA0000000000000000000205 /* Push */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Push;
+		};
+		JA0000000000000000000206 /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Realtime;
+		};
+		JA0000000000000000000207 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = JA0000000000000000001002 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+		JA0000000000000000000208 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = JA0000000000000000001003 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		JA0000000000000000000209 /* Offline */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Offline;
+		};
+		JA0000000000000000000210 /* Voice */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Voice;
+		};
+		JA0000000000000000000211 /* Networking */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Networking;
+		};
+		JA0000000000000000000212 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Auth;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = JA0000000000000000000001 /* Project object */;
+}

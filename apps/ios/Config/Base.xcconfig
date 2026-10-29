@@ -1,0 +1,29 @@
+// The settings of the Jarvis app. Each machine overrides them in
+// Config/Local.xcconfig (git-ignored), copied from Local.xcconfig.example.
+// Note: `//` starts a comment in an xcconfig, so URLs are split in scheme and host.
+
+JARVIS_BUNDLE_IDENTIFIER = jarvis.campeonato.app
+JARVIS_DEVELOPMENT_TEAM =
+
+// The entitlements: push (aps-environment) needs a paid Apple Developer
+// Program team. A free Personal Team uses Support/JarvisPersonalTeam.entitlements
+// (no push) to run the app on its own iPhone.
+JARVIS_ENTITLEMENTS = Support/Jarvis.entitlements
+
+// The Laravel server (API v1 under /api/v1). Defaults to production;
+// Config/Local.xcconfig points it at Sail for development.
+JARVIS_API_SCHEME = https
+JARVIS_API_HOST = jarvis.campeonato.app
+
+// Reverb (Pusher protocol): the REVERB_* values of the server's .env.
+JARVIS_REVERB_SCHEME = wss
+JARVIS_REVERB_HOST = ws-jarvis.campeonato.app
+JARVIS_REVERB_PORT = 443
+JARVIS_REVERB_APP_KEY = 9dc984ac50a5da563499
+
+// Google Sign-In: the iOS OAuth client (GOOGLE_IOS_CLIENT_ID on the server)
+// and its reversed form, the URL scheme the SDK returns to.
+JARVIS_GOOGLE_IOS_CLIENT_ID =
+JARVIS_GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.unset
+
+#include? "Local.xcconfig"

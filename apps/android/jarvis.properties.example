@@ -1,0 +1,24 @@
+# Copy to jarvis.properties (git-ignored) and fill in. Read by app/build.gradle.kts.
+
+# The Laravel server (the API v1 is under /api/v1). On a device, the machine
+# running Sail as seen from the phone (same Wi-Fi). Leave the server and Reverb
+# keys out to use production (the build.gradle.kts defaults: jarvis.campeonato.app).
+jarvis.apiBaseUrl=http://192.168.0.10
+
+# Reverb (Pusher protocol): the REVERB_* values of the server's .env.
+jarvis.reverbHost=192.168.0.10
+jarvis.reverbPort=8080
+jarvis.reverbUseTls=false
+jarvis.reverbAppKey=jarvis-local-key
+
+# Google sign-in (Credential Manager): the WEB OAuth client id of the Google
+# Cloud project, the server's GOOGLE_CLIENT_ID. The ID token is issued to it.
+jarvis.googleServerClientId=1234567890-abc.apps.googleusercontent.com
+
+# Release signing (the APK installed directly). Create the keystore once with:
+#   keytool -genkeypair -v -keystore jarvis-release.jks -alias jarvis \
+#     -keyalg RSA -keysize 4096 -validity 10000
+jarvis.signing.storeFile=../jarvis-release.jks
+jarvis.signing.storePassword=change-me
+jarvis.signing.keyAlias=jarvis
+jarvis.signing.keyPassword=change-me

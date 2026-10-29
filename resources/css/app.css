@@ -1,0 +1,412 @@
+@import 'tailwindcss';
+@import '../../vendor/tallstackui/tallstackui/css/v4.css';
+
+/*
+ * TallStackUI's fields expect the base styles of the forms plugin: its own
+ * classes set the vertical padding and leave the horizontal one and the
+ * native select arrow to it.
+ */
+@plugin '@tailwindcss/forms';
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/tallstackui/tallstackui/**/*.php';
+@source '../../app/Providers/TallStackUiServiceProvider.php';
+@source '../../app/View';
+/* The template editor draws its chips and blocks from script. */
+@source '../js';
+
+/* `dark:` follows the system setting (prefers-color-scheme), never a class. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/* `sidebar-collapsed:` applies while the desktop sidebar shows its icons only (resources/js/components/sidebar.js). */
+@custom-variant sidebar-collapsed (&:where([data-sidebar=collapsed] *));
+
+/* `standalone:` applies once the web app is installed and opened from the home screen (no browser chrome). */
+@custom-variant standalone (@media (display-mode: standalone));
+
+/*
+ * Design system iOS 27 (US-12.2): the refined Liquid Glass, with less
+ * transparency than the first release so text on glass stays legible.
+ *
+ * Every color the interface paints is a token below. `@theme` holds the light
+ * theme and the `prefers-color-scheme: dark` block further down overrides the
+ * same variables, so one utility (`bg-system-background`, `text-label`) works
+ * in both themes and the system setting picks the theme.
+ *
+ * Text tokens keep at least 4.5:1 (WCAG AA) on every background token of
+ * their theme — tests/Unit/ThemeTokensTest.php checks it. Apple's stock
+ * values that fail it (systemBlue #007AFF, systemGreen #34C759 as text,
+ * the translucent secondaryLabel) are replaced by their increased-contrast
+ * variants.
+ */
+@theme {
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
+
+    /* Labels (text and glyphs). */
+    --color-label: #000000;
+    --color-secondary-label: #636366;
+
+    /* Backgrounds: plain screens, and grouped screens (inset lists) with their cells. */
+    --color-system-background: #ffffff;
+    --color-secondary-system-background: #f2f2f7;
+    --color-grouped-background: #f2f2f7;
+    --color-secondary-grouped-background: #ffffff;
+    --color-tertiary-grouped-background: #f2f2f7;
+    /* The selected segment of a segmented control, raised over its track. */
+    --color-segment-thumb: #ffffff;
+
+    /* Hairlines and the fill of controls (search field, segmented control). */
+    --color-separator: rgb(60 60 67 / 0.29);
+    --color-fill: rgb(118 118 128 / 0.12);
+    --color-fill-pressed: rgb(118 118 128 / 0.2);
+
+    /* The tint: `tint` for text, links and icons; `tint-fill` behind `on-tint` text. */
+    --color-tint: #0062cc;
+    --color-tint-fill: #0062cc;
+    --color-tint-fill-pressed: #004fb8;
+    --color-on-tint: #ffffff;
+
+    /* Status colors, readable as text. */
+    --color-danger: #d70015;
+    --color-success: #1b7a33;
+    --color-warning: #c93400;
+
+    /* The "on" track of a switch (a fill, never text). */
+    --color-switch-on: #34c759;
+
+    /* The two ticks of a message read, WhatsApp blue on a sent bubble (a glyph, never text). */
+    --color-receipt-read: #027eb5;
+
+    /* Behind a video, and the scrim its controls sit on (`on-tint` over it). */
+    --color-media-backdrop: #000000;
+    --color-media-scrim: rgb(0 0 0 / 0.55);
+
+    /*
+     * The WhatsApp chat, in WhatsApp Web's colors: the wallpaper behind the
+     * messages, the bars above and below it, the field, the bubbles (in from
+     * the contact, out from the number), their text, time and links, and
+     * WhatsApp's green behind the send button (`on-tint` over it).
+     */
+    --color-chat-wallpaper: #efeae2;
+    --color-chat-panel: #f0f2f5;
+    --color-chat-input: #ffffff;
+    --color-chat-bubble-in: #ffffff;
+    --color-chat-bubble-out: #d9fdd3;
+    --color-chat-text: #111b21;
+    --color-chat-meta: #54656f;
+    --color-chat-link: #026a9a;
+    --color-chat-accent: #008069;
+    --color-chat-list: #ffffff;
+    --color-chat-list-hover: #f5f6f6;
+    --color-chat-list-active: #f0f2f5;
+    --color-chat-divider: #e9edef;
+    --color-chat-unread: #007a63;
+    --color-on-chat-unread: #ffffff;
+
+    /* The agenda's sources: the dot and edge of each one's items (fills, never text). */
+    --color-calendar-reminder: #0062cc;
+    --color-calendar-event: #d70015;
+    --color-calendar-invoice: #c93400;
+    --color-calendar-whatsapp: #248a3d;
+    --color-calendar-shopping: #a2845e;
+    --color-calendar-google: #039be5;
+
+    /* Glass materials: ~80% opaque behind a blur, with a hairline rim. */
+    --color-glass: rgb(255 255 255 / 0.8);
+    --color-glass-thick: rgb(255 255 255 / 0.9);
+    --color-glass-border: rgb(0 0 0 / 0.08);
+    --color-overlay: rgb(0 0 0 / 0.3);
+
+    /*
+     * TallStackUI's `primary` palette is the tint, so its components follow
+     * the theme without per-component colors. Solid buttons paint `500` (light)
+     * or `700` (dark) behind `50`; flat ones write `600` (light) or `400` (dark).
+     */
+    --color-primary-50: var(--color-on-tint);
+    --color-primary-100: color-mix(in srgb, var(--color-tint) 12%, var(--color-system-background));
+    --color-primary-200: color-mix(in srgb, var(--color-tint) 22%, var(--color-system-background));
+    --color-primary-300: color-mix(in srgb, var(--color-tint) 45%, var(--color-system-background));
+    --color-primary-400: var(--color-tint);
+    --color-primary-500: var(--color-tint-fill);
+    --color-primary-600: var(--color-tint-fill-pressed);
+    --color-primary-700: var(--color-tint-fill);
+    --color-primary-800: var(--color-tint-fill-pressed);
+    --color-primary-900: color-mix(in srgb, var(--color-tint-fill) 60%, var(--color-label));
+    --color-primary-950: color-mix(in srgb, var(--color-tint-fill) 40%, var(--color-label));
+
+    /*
+     * TallStackUI's `secondary` palette (violet by default) is the tint too:
+     * the flat buttons that cancel or pick (Cancel, Today…) are blue, as on
+     * iOS.
+     */
+    --color-secondary-50: var(--color-primary-50);
+    --color-secondary-100: var(--color-primary-100);
+    --color-secondary-200: var(--color-primary-200);
+    --color-secondary-300: var(--color-primary-300);
+    --color-secondary-400: var(--color-primary-400);
+    --color-secondary-500: var(--color-primary-500);
+    --color-secondary-600: var(--color-primary-600);
+    --color-secondary-700: var(--color-primary-700);
+    --color-secondary-800: var(--color-primary-800);
+    --color-secondary-900: var(--color-primary-900);
+    --color-secondary-950: var(--color-primary-950);
+
+    /*
+     * The neutral palettes TallStackUI paints with — `gray` in the light theme,
+     * `dark` in the dark one — are Apple's system grays, so a component left
+     * uncustomized still reads as iOS.
+     */
+    --color-gray-50: #f9f9fb;
+    --color-gray-100: #f2f2f7;
+    --color-gray-200: #e5e5ea;
+    --color-gray-300: #d1d1d6;
+    --color-gray-400: #aeaeb2;
+    --color-gray-500: #636366;
+    --color-gray-600: #48484a;
+    --color-gray-700: #3a3a3c;
+    --color-gray-800: #2c2c2e;
+    --color-gray-900: #1c1c1e;
+    --color-gray-950: #0c0c0d;
+
+    --color-dark-50: #f2f2f7;
+    --color-dark-100: #e5e5ea;
+    --color-dark-200: #d1d1d6;
+    --color-dark-300: #c7c7cc;
+    --color-dark-400: #98989f;
+    --color-dark-500: #636366;
+    --color-dark-600: #48484a;
+    --color-dark-700: #2c2c2e;
+    --color-dark-800: #1c1c1e;
+    --color-dark-900: #000000;
+    --color-dark-950: #000000;
+
+    /*
+     * Continuous corner radii: controls, cards and list groups, sheets and
+     * panels — the rounder corners of iOS 26 and 27, nested concentrically.
+     */
+    --radius-control: 12px;
+    --radius-card: 20px;
+    --radius-sheet: 28px;
+
+    /* Soft shadows: resting surfaces and floating layers (glass, sheets, toasts). */
+    --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 2px 8px -2px rgb(0 0 0 / 0.06);
+    --shadow-floating: 0 12px 32px -12px rgb(0 0 0 / 0.18), 0 2px 8px -2px rgb(0 0 0 / 0.06);
+}
+
+@layer base {
+    :root {
+        color-scheme: light dark;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --color-label: #ffffff;
+            --color-secondary-label: #98989f;
+
+            --color-system-background: #000000;
+            --color-secondary-system-background: #1c1c1e;
+            --color-grouped-background: #000000;
+            --color-secondary-grouped-background: #1c1c1e;
+            --color-tertiary-grouped-background: #2c2c2e;
+            /* The selected segment of a segmented control, raised over its track. */
+            --color-segment-thumb: #636366;
+
+            --color-separator: rgb(84 84 88 / 0.6);
+            --color-fill: rgb(118 118 128 / 0.24);
+            --color-fill-pressed: rgb(118 118 128 / 0.36);
+
+            --color-tint: #409cff;
+            --color-tint-fill: #0060df;
+            --color-tint-fill-pressed: #004fb8;
+            --color-on-tint: #ffffff;
+
+            --color-danger: #ff6961;
+            --color-success: #30db5b;
+            --color-warning: #ffb340;
+
+            --color-switch-on: #30d158;
+
+            --color-receipt-read: #53bdeb;
+
+            --color-media-backdrop: #000000;
+            --color-media-scrim: rgb(0 0 0 / 0.55);
+
+            --color-chat-wallpaper: #0b141a;
+            --color-chat-panel: #202c33;
+            --color-chat-input: #2a3942;
+            --color-chat-bubble-in: #202c33;
+            --color-chat-bubble-out: #005c4b;
+            --color-chat-text: #e9edef;
+            --color-chat-meta: #c8d3d8;
+            --color-chat-link: #8fd8f7;
+            --color-chat-accent: #008069;
+            --color-chat-list: #111b21;
+            --color-chat-list-hover: #202c33;
+            --color-chat-list-active: #2a3942;
+            --color-chat-divider: #222d34;
+            --color-chat-unread: #21c063;
+            --color-on-chat-unread: #111b21;
+
+            --color-calendar-reminder: #409cff;
+            --color-calendar-event: #ff6961;
+            --color-calendar-invoice: #ffb340;
+            --color-calendar-whatsapp: #30db5b;
+            --color-calendar-shopping: #c7a982;
+            --color-calendar-google: #4fc3f7;
+
+            --color-glass: rgb(28 28 30 / 0.8);
+            --color-glass-thick: rgb(28 28 30 / 0.9);
+            --color-glass-border: rgb(255 255 255 / 0.1);
+            --color-overlay: rgb(0 0 0 / 0.55);
+
+            --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+            --shadow-floating: 0 12px 32px -12px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+        }
+    }
+
+    /* Without backdrop-filter the glass would show the content unblurred. */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        :root {
+            --color-glass: var(--color-secondary-grouped-background);
+            --color-glass-thick: var(--color-secondary-grouped-background);
+        }
+    }
+
+    /* The system asks for less transparency or more contrast: the glass turns opaque. */
+    @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        :root {
+            --color-glass: var(--color-secondary-grouped-background);
+            --color-glass-thick: var(--color-secondary-grouped-background);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+}
+
+/* Liquid Glass materials: navigation bars, sidebars and floating layers. */
+@utility glass {
+    background-color: var(--color-glass);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+}
+
+@utility glass-thick {
+    background-color: var(--color-glass-thick);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    backdrop-filter: blur(40px) saturate(180%);
+}
+
+@utility glass-edge {
+    border: 1px solid var(--color-glass-border);
+    box-shadow: var(--shadow-floating);
+}
+
+/*
+ * The floating Liquid Glass bars of a phone (the tab bar, the chat's
+ * composer): rounder and thicker than the glass of a panel, lifted off the
+ * content they float over.
+ */
+@utility glass-floating {
+    background-color: var(--color-glass-thick);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid var(--color-glass-border);
+    box-shadow: var(--shadow-floating);
+}
+
+/* Soft tinted light behind the visitor screens, which the glass diffuses. */
+@utility ambient-backdrop {
+    background-color: var(--color-grouped-background);
+    background-image:
+        radial-gradient(48rem 32rem at 0% 0%, color-mix(in srgb, var(--color-tint) 22%, transparent), transparent 70%),
+        radial-gradient(40rem 28rem at 100% 100%, color-mix(in srgb, var(--color-switch-on) 16%, transparent), transparent 70%);
+}
+
+/* A chat message shown from the search or the starred list flashes once. */
+@keyframes chat-flash {
+    0%, 100% { background-color: transparent; }
+    30% { background-color: color-mix(in srgb, var(--color-tint) 18%, transparent); }
+}
+
+.chat-flash {
+    animation: chat-flash 1.6s ease-out;
+    border-radius: var(--radius-card);
+}
+
+/* The WhatsApp text field (whatsappEditor): its placeholder while empty. */
+.chat-field[data-empty='true']::before {
+    content: attr(data-placeholder);
+    color: var(--color-chat-meta);
+    pointer-events: none;
+    position: absolute;
+}
+
+/* The bar under the chat's header while an action of the screen is on its way. */
+@keyframes chat-progress {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(300%); }
+}
+
+.chat-progress {
+    animation: chat-progress 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-progress {
+        animation: none;
+        width: 100%;
+        opacity: 0.6;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-flash { animation: none; outline: 2px solid var(--color-tint); }
+}
+
+/*
+ * Installed as an app (the PWA): the page behaves like a native screen —
+ * no tap flash or long-press callout on the bars and buttons, no text
+ * selection in them, and no bounce of the whole page past its edges on
+ * the browsers that honor it (the lists still scroll and bounce).
+ */
+@media (display-mode: standalone) {
+    html {
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior-y: none;
+    }
+
+    nav, header, button, [role='tab'] {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    input, textarea, [contenteditable] {
+        -webkit-user-select: text;
+        user-select: text;
+    }
+}
+
+/*
+ * Safari on a phone zooms the page into any field written under 16px when
+ * it gets the focus, and leaves it zoomed. Fields on a touch screen are
+ * 16px, whatever size their utility asks for (unlayered, so it wins over
+ * the utilities).
+ */
+@media (pointer: coarse) {
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
+    textarea,
+    select {
+        font-size: 16px;
+    }
+}

@@ -1,0 +1,10 @@
+import './echo';
+import './components/sidebar';
+import './components/pwa';
+import './components/template-editor/editor';
+import './components/media-player';
+import './components/whatsapp-presence';
+import './components/voice-recorder';
+import './components/whatsapp-chat-menu';
+import './components/whatsapp-editor';
+import './components/emoji-picker';

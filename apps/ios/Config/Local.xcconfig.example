@@ -1,0 +1,19 @@
+// Copy to Config/Local.xcconfig (git-ignored) and fill in.
+
+JARVIS_DEVELOPMENT_TEAM = ABCDE12345
+// A free Personal Team (no Apple Developer Program): no push.
+// JARVIS_ENTITLEMENTS = Support/JarvisPersonalTeam.entitlements
+JARVIS_BUNDLE_IDENTIFIER = jarvis.campeonato.app
+
+// The Mac running Sail, as seen from the iPhone (same Wi-Fi). Remove these
+// lines to use production (Base.xcconfig: jarvis.campeonato.app).
+JARVIS_API_SCHEME = http
+JARVIS_API_HOST = 192.168.0.10
+
+JARVIS_REVERB_SCHEME = ws
+JARVIS_REVERB_HOST = 192.168.0.10
+JARVIS_REVERB_PORT = 8080
+JARVIS_REVERB_APP_KEY = jarvis-local-key
+
+JARVIS_GOOGLE_IOS_CLIENT_ID = 1234567890-abc.apps.googleusercontent.com
+JARVIS_GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.1234567890-abc
