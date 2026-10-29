@@ -54,11 +54,21 @@ final class InvoicePdf
      */
     public static function store(Invoice $invoice): string
     {
-        $path = "invoices/{$invoice->number}.pdf";
+        $path = self::path($invoice);
 
         Storage::disk(self::disk())->put($path, self::for($invoice)->generatePdfContent());
 
         return $path;
+    }
+
+    /**
+     * Where the PDF of an invoice is stored. Numbers count per workspace, so
+     * the workspace is part of the path: two workspaces' `202610-001` never
+     * share a file.
+     */
+    public static function path(Invoice $invoice): string
+    {
+        return "invoices/{$invoice->workspace->friendly_id}/{$invoice->number}.pdf";
     }
 
     /**

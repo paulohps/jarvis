@@ -90,7 +90,7 @@ test('generated invoice snapshots payer and issuer', function () {
         ->and($invoice->status->slug)->toBe(InvoiceStatus::DRAFT);
 
     // The PDF is stored on the private disk.
-    expect($invoice->pdf_path)->toBe('invoices/202610-001.pdf');
+    expect($invoice->pdf_path)->toBe("invoices/{$invoice->workspace->friendly_id}/202610-001.pdf");
     Storage::disk(InvoicePdf::disk())->assertExists($invoice->pdf_path);
     Pdf::assertViewIs(InvoicePdf::VIEW);
 });
@@ -132,6 +132,6 @@ test('a pdf failure keeps the invoice and its number', function () {
     $retried = app(GenerateInvoice::class)($invoiceRecurrence, $this->runAt, '2026-10');
 
     expect($retried->is($invoice))->toBeTrue()
-        ->and($retried->pdf_path)->toBe('invoices/202610-001.pdf');
-    Storage::disk(InvoicePdf::disk())->assertExists('invoices/202610-001.pdf');
+        ->and($retried->pdf_path)->toBe("invoices/{$invoice->workspace->friendly_id}/202610-001.pdf");
+    Storage::disk(InvoicePdf::disk())->assertExists($retried->pdf_path);
 });

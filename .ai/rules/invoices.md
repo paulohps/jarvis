@@ -26,8 +26,8 @@ The module (`Module::INVOICES`) has no API v1 endpoints: routes are in `routes/w
 ## Numbers are per workspace, never reused
 `InvoiceNumberGenerator::next()` reserves `YYYYMM-NNN` (issue month, counter restarts at 001) per workspace via `SELECT … FOR UPDATE` on `invoice_number_sequences` (inserted with `insertOrIgnore` first). Two workspaces may both have `202610-001`; the unique is `(workspace_id, number_year_month, number_sequence)`. A cancelled invoice keeps its number. Never compute numbers elsewhere or "fill gaps".
 
-## PDF path collides across workspaces (known issue)
-`InvoicePdf::store()` writes `invoices/{number}.pdf`, but numbers are only unique per workspace, so a second workspace's `202610-001` overwrites the first one's file. Anything touching PDF storage must keep this in mind; the fix is to include the workspace (or invoice friendly id) in the path plus a data migration.
+## PDFs are stored per workspace
+`InvoicePdf::store()` writes `InvoicePdf::path()`, `invoices/{workspace friendly id}/{number}.pdf`: numbers are only unique per workspace, so the workspace must stay in the path. Always read the file from `invoices.pdf_path`, never rebuild it — invoices stored before this change keep their old `invoices/{number}.pdf` path. Test: `tests/Feature/InvoiceWorkspacesTest.php`.
 
 ## Idempotency per period
 A recurrence slot issues at most one invoice per `period_key` (`InvoiceRecurrence::periodKeyFor()`: `Y-m` for monthly, the local date otherwise), unique `(invoice_recurrence_id, period_key)`. `GenerateInvoice` locks the recurrence row, returns the existing invoice (`wasRecentlyCreated` false) and catches `UniqueConstraintViolationException` outside the transaction (PostgreSQL aborts a transaction on a unique violation). Manual runs (`GenerateAndSendNow`, one-offs) pass no period key and always issue.

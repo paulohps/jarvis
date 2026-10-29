@@ -75,6 +75,18 @@ beforeEach(function () {
     );
 });
 
+test('the same number in two workspaces keeps two pdfs', function () {
+    $ours = Invoice::factory()->create(['workspace_id' => $this->household->id, 'number' => '202610-001']);
+    $theirs = Invoice::factory()->create(['workspace_id' => $this->smiths->id, 'number' => '202610-001']);
+
+    $ourPath = InvoicePdf::store($ours);
+    $theirPath = InvoicePdf::store($theirs);
+
+    expect($ourPath)->toBe("invoices/{$this->household->friendly_id}/202610-001.pdf")
+        ->and($theirPath)->toBe("invoices/{$this->smiths->friendly_id}/202610-001.pdf");
+    Storage::disk(InvoicePdf::disk())->assertExists([$ourPath, $theirPath]);
+});
+
 test('another workspace invoices are neither listed nor opened', function () {
     $payer = Payer::factory()->create(['workspace_id' => $this->smiths->id, 'name' => 'Smith payer']);
     $issuer = Issuer::factory()->create(['workspace_id' => $this->smiths->id, 'name' => 'Smith issuer']);

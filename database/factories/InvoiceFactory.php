@@ -89,7 +89,7 @@ class InvoiceFactory extends Factory
     public function sent(): static
     {
         return $this->status(InvoiceStatus::SENT, [
-            'pdf_path' => fn (array $attributes): string => "invoices/{$attributes['number']}.pdf",
+            'pdf_path' => fn (array $attributes): string => self::pdfPath($attributes),
             'sent_at' => now(),
         ]);
     }
@@ -100,7 +100,7 @@ class InvoiceFactory extends Factory
     public function failed(): static
     {
         return $this->status(InvoiceStatus::FAILED, [
-            'pdf_path' => fn (array $attributes): string => "invoices/{$attributes['number']}.pdf",
+            'pdf_path' => fn (array $attributes): string => self::pdfPath($attributes),
         ]);
     }
 
@@ -163,6 +163,18 @@ class InvoiceFactory extends Factory
             $workspace instanceof Workspace => $workspace->id,
             default => null,
         };
+    }
+
+    /**
+     * The stored PDF's path, as `InvoicePdf::path()` builds it.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private static function pdfPath(array $attributes): string
+    {
+        $workspace = Workspace::query()->findOrFail(self::givenWorkspaceId($attributes));
+
+        return "invoices/{$workspace->friendly_id}/{$attributes['number']}.pdf";
     }
 
     /**

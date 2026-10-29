@@ -72,7 +72,7 @@ test('pending invoice can be edited and pdf regenerated', function () {
     // The PDF was rendered again from the new values, at the same path.
     Pdf::assertViewHas('amount', '3,500.50');
     Pdf::assertViewHas('dueDate', '15/11/2026');
-    expect($updated->pdf_path)->toBe("invoices/{$number}.pdf");
+    expect($updated->pdf_path)->toBe("invoices/{$updated->workspace->friendly_id}/{$number}.pdf");
     Storage::disk(InvoicePdf::disk())->assertExists($updated->pdf_path);
 
     // Invalid values are refused.
