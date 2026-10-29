@@ -12,17 +12,18 @@ public/storage
 .env.*
 auth.json
 
-# Ferramentas de agente/IDE e specs — fora da imagem.
+# Ferramentas de agente/IDE — fora da imagem.
+.ai
 .agents
 .claude
 .codex
 .idea
 .zed
-.phases
-.spec
 .mcp.json
 opencode.json
 boost.json
+AGENTS.md
+CLAUDE.md
 
 # Estado runtime (vem de volume/efemero, nao da imagem).
 storage/app/public/*

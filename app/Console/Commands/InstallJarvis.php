@@ -50,6 +50,15 @@ class InstallJarvis extends Command
             return self::SUCCESS;
         }
 
+        // Without a terminal and without any of the options (CI, a
+        // container's first boot) there is nobody to ask: the database is
+        // ready and the super admin is left for a later run.
+        if (! $this->input->isInteractive() && $this->option('name') === null && $this->option('email') === null && $this->option('password') === null) {
+            $this->components->warn('No super admin yet: run `php artisan jarvis:install` in a terminal, or pass --name, --email and --password.');
+
+            return self::SUCCESS;
+        }
+
         return $this->createSuperAdmin();
     }
 

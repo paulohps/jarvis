@@ -50,6 +50,15 @@ test('install without interaction fails when an option is missing', function () 
     expect(User::query()->count())->toBe(0);
 });
 
+test('install without interaction nor options prepares the database and leaves the super admin for later', function () {
+    $this->artisan('jarvis:install', ['--no-interaction' => true])
+        ->expectsOutputToContain('No super admin yet')
+        ->assertSuccessful();
+
+    expect(User::query()->count())->toBe(0)
+        ->and(DB::table('modules')->count())->toBeGreaterThan(0);
+});
+
 test('install refuses an e-mail that already has an account', function () {
     User::factory()->create(['email' => 'jane@example.com']);
 

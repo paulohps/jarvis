@@ -37,3 +37,11 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+# AI agents: generated locally by `php artisan boost:install` from .ai/
+/.codex
+/.gemini
+/.windsurf
+/GEMINI.md
+/.github/copilot-instructions.md
+/.github/skills
+/.ai/rules/boost
